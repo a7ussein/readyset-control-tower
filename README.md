@@ -10,7 +10,7 @@ writes `findings.json` in the organisers' shared format.
 
 ## Status
 
-The comparison engine works and is tested. The page is still a shell that shows one findings file.
+The comparison engine and the page both work. The engine is tested, and the two together have been run on the organisers' practice release.
 
 - [`docs/PLAN-IN-SHORT.md`](docs/PLAN-IN-SHORT.md): the plan in two minutes.
 - [`docs/OUTPUT-CONTRACT.md`](docs/OUTPUT-CONTRACT.md): the rules for `findings.json`.
@@ -19,25 +19,28 @@ The comparison engine works and is tested. The page is still a shell that shows 
 
 ## Setup and run
 
-You need Python 3.9 or newer and nothing else: no packages to install.
+Our tool needs Python 3.9 or newer and nothing else. Only the organisers' own scripts (fetching the data, building the practice release, validating the output) need two packages, covered below.
 
 ### Quick start, no data and no install needed beyond Python 3.9+
 
-Clone the repository, then run:
-
 ```bash
+git clone https://github.com/a7ussein/readyset-control-tower.git
+cd readyset-control-tower
 ./run.sh        # http://localhost:8010  (run.bat on Windows)
 ```
 
 It opens http://localhost:8010 showing the hand-written example (`docs/example-findings.json`). Note that this example uses completely invented data.
 
+If port 8010 is busy, pick another: `./run.sh serve --port 8123`.
+
 ### Comparing real releases
 
 The event data is fetched with the organisers' `fetch.py` from their challenge repository (https://github.com/disleveK/oncosys-hackathon-challenge). No data files are committed to this repository.
 
-Get the data and the practice release, in a folder next to this one. The organisers' scripts need pandas and jsonschema, installed here in a virtual environment; our tool needs neither.
+Get the data and the practice release, in a folder next to this one (not inside it). Starting from this repository's folder: The organisers' scripts need pandas and jsonschema, installed here in a virtual environment; our tool needs neither.
 
 ```bash
+cd ..
 git clone https://github.com/disleveK/oncosys-hackathon-challenge.git
 cd oncosys-hackathon-challenge
 python3 -m venv .venv
@@ -45,6 +48,7 @@ source .venv/bin/activate                  # Windows: .venv\Scripts\activate
 pip install pandas jsonschema
 python data/tcga-brca/fetch.py             # the trusted release, into data/tcga-brca/raw/, checksums verified
 python data/tcga-brca/make_release.py      # practice release B, into data/tcga-brca/releases/practice-B/
+cd ../readyset-control-tower               # back to this repository; keep the virtual environment active
 ```
 
 On a Mac with Python from python.org, `fetch.py` can fail with `SSL: CERTIFICATE_VERIFY_FAILED`. Run `/Applications/Python 3.x/Install Certificates.command` once (3.x is your Python version), then run `fetch.py` again.
@@ -57,6 +61,9 @@ Once you have the releases, compare them (the trusted release first):
 # Compare two releases, from this repository's folder (RELEASE_A is the trusted one):
 D=../oncosys-hackathon-challenge/data/tcga-brca
 python3 -m control_tower compare $D/raw $D/releases/practice-B --out findings.json
+
+# Check the output with the organisers' validator (needs the virtual environment from above):
+python ../oncosys-hackathon-challenge/format/validate.py findings.json
 
 # Look at the result in the page:
 ./run.sh serve --findings findings.json        # http://localhost:8010  (run.bat on Windows)
