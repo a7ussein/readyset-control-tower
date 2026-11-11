@@ -12,6 +12,9 @@ export interface Finding {
 export interface Analysis { id: string; status: 'changed' | 'unchanged' | 'not_rerun'; before?: Record<string, unknown>; after?: Record<string, unknown>; note?: string }
 export interface Repair { id: string; action: 'exclude' | 'relabel' | 'restore_from_previous_release' | 'flag_for_review' | 'other'; targets: Pointer[]; justification: string; addresses: string[] }
 export interface ReleaseFile { file: string; sha256: string; hash_of?: 'file' | 'content' }
+export interface FileInfo { file: string; status: 'changed' | 'unchanged' | 'absent' | 'missing_in_one' | 'unreadable'; opened: boolean; note?: string }
+// One named row of a large file, with each sample's value in both releases, so a reader can check a finding by hand.
+export interface Witness { file: string; row: string; releases: string[]; values: { sample: string; before: string | null; after: string | null }[] }
 export interface Findings {
   format_version: '0.2'
   producer: { team: string; product: string; track: string }
@@ -24,6 +27,8 @@ export interface Findings {
   x_readyset?: {
     example_notice?: string; engine_version?: string; generated_at?: string; run_seconds?: number
     analyses_registered?: string[]; scope?: string
-    files?: { file: string; status: 'changed' | 'unchanged' | 'absent' | 'missing_in_one' | 'unreadable'; opened: boolean }[]
+    files?: FileInfo[]
+    witness?: Record<string, Witness>
+    analysis_titles?: Record<string, string>
   }
 }

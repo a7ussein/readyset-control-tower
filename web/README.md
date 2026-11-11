@@ -26,13 +26,12 @@ After a change: `npm run build`, and commit `web/dist` so nobody needs Node to r
 ## What is here
 | File | What it is |
 |---|---|
-| `src/App.tsx` | The shell. A comment marks where the screen goes and lists the six things it must show. |
+| `src/App.tsx` | The screen: verdict bar, the list of findings and analyses, and one of them examined in detail with its proof. |
 | `src/findings.ts` | TypeScript types for `findings.json`. The rules for each field are in `docs/OUTPUT-CONTRACT.md`. |
 | `src/api.ts` | The only place that talks to the server. |
 | `src/theme.ts` | Light and dark, remembered. |
-| `src/Panel.tsx` | A side drawer: focus stays inside it, Escape closes it. |
-| `src/index.css` | The design tokens: colours for both themes, the three typefaces. Use the tokens, never a literal colour. |
-| `src/App.css` | The design system's classes: verdict word, check strip, meters, tables, drawers, buttons. |
+| `src/SectionBoundary.tsx` | Keeps one broken section from taking the page down. |
+| `src/bench.css` | The design tokens for both themes and every style on the page. Use the tokens, never a literal colour. |
 | `public/brand/` | The mark for light and dark, and the icons. |
 
 ## The design, in four rules
