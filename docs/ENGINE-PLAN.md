@@ -1,7 +1,8 @@
 # Engine plan
 
-Status: **draft for the team to agree.** Written from the organisers' code and briefs. Nothing here has been run on
-the real data yet, so every statement about file layout beyond the clinical and protein files is still to confirm.
+Status: **draft for the team to agree.** Written from the organisers' code and briefs, then checked against the
+event's frozen release (downloaded with `fetch.py`; all six checksums matched). Section 7 lists what was measured.
+No engine code exists yet.
 
 The engine takes two release folders and writes `findings.json` as described in
 [`OUTPUT-CONTRACT.md`](OUTPUT-CONTRACT.md). This page says how.
@@ -40,9 +41,12 @@ organisers' script prints; a test compares the two on release A.
 
 A fingerprint is a short hash of everything one sample holds in one file.
 
-- In a file with samples as columns: the hash of that column's cells, each paired with its row name (the protein or
-  gene), so the order of rows does not matter.
-- In `clinical.tsv` (one row per sample): the hash of that row's cells, each paired with its column name.
+- In a file with samples as columns (mutation, protein, copy number, RNA): the hash of that column's cells, each
+  paired with its row name (the protein or gene), so the order of rows does not matter.
+- In a file with one row per sample (`clinical.tsv` and `survival.tsv`): the hash of that row's cells, each paired
+  with its column name.
+- The loader works out which way round a file is by where the `TCGA-` ids are (the header, or the first column). It
+  does not assume.
 - Cells are read as their exact text. A blank and `NA` are different. Nothing is parsed as a number.
 - A profile that is entirely blank gets no fingerprint. Otherwise every empty sample would look like a copy of every
   other.
@@ -89,11 +93,29 @@ so, not as a duplicate.
 
 The hidden release is run live inside two minutes of questions.
 
-- **Budget (proposal):** under 30 seconds on the demo laptop in the worst case, where the 64 MB RNA file changed.
+- **Budget:** under 30 seconds on the demo laptop in the worst case, where every file changed.
 - **How it stays fast:** unchanged files are never opened; fingerprints are computed in one streaming pass; cell
   comparison only happens for samples whose fingerprint differs.
-- **Not measured yet.** The first thing to do with the real data is time the content hash and the fingerprint pass on
-  each of the six files, and write the numbers here.
+
+Measured on release A, standard library only, one pass per file (Apple-silicon laptop, 10 Nov):
+
+| File | Size unpacked | Shape | Content hash | Fingerprint every sample |
+|---|---|---|---|---|
+| `clinical.tsv` | 1.7 MB | 1,247 samples × 194 columns | under 0.01 s | 0.04 s |
+| `survival.tsv` | 0.1 MB | 1,236 samples × 11 columns | under 0.01 s | under 0.01 s |
+| `protein_rppa.tsv.gz` | 1.7 MB | 131 proteins × 747 samples | 0.01 s | 0.03 s |
+| `mutation_gene_level.tsv.gz` | 64.5 MB | 40,543 genes × 791 samples | 0.03 s | 3.9 s |
+| `copy_number_gistic.tsv.gz` | 59.9 MB | 24,776 genes × 1,080 samples | 0.03 s | 3.7 s |
+| `rna_hiseq.tsv.gz` | 180.4 MB | 20,530 genes × 1,218 samples | 0.22 s | 4.4 s |
+
+What this means:
+
+- Hashing all six files in both releases takes about half a second. Deciding "nothing changed" is nearly instant.
+- The two files A1 and A2 read (clinical and protein) fingerprint in well under a tenth of a second.
+- The worst case, all three large files changed, is about 12 seconds per release, so about 24 seconds for the
+  fingerprint pass before cell comparison. That is inside the budget with little to spare, on this laptop. It must be
+  re-timed on the demo laptop, and the cell comparison still has to be measured once it exists.
+- The standard library is fast enough. There is no speed case for pandas.
 
 ## 5. Choices to settle
 
@@ -122,10 +144,21 @@ Each step has its test written first. Cut from the bottom if time runs out.
 11. Missing data
 12. Catch-all
 
-## 7. Still to confirm on the real files
+## 7. What the real files showed
 
-- That every file except `clinical.tsv` has samples as columns and one name per row.
-- Whether sample ids in every file are the 15-character form.
-- Whether release A already contains samples with identical profiles (the duplicate detector must not flag those).
-- How a blank is written in each file: an empty cell, `NA`, or both.
-- The timings in section 4.
+Checked on release A on 10 Nov, with our own read-only script.
+
+| Question | Answer |
+|---|---|
+| Does every file except `clinical.tsv` have samples as columns? | **No.** `survival.tsv` has one sample per row, like the clinical file. The other four have samples as columns. |
+| Are sample ids always the 15-character form? | Yes, in all six files. No id is repeated within a file. |
+| Which sample types are in each file? | Clinical: 1,101 primary, 139 normal, 7 metastasis. Protein: 742 primary, 5 metastasis, no normals. Mutation and copy number: primary only. |
+| Does release A already contain identical profiles? | **Yes.** `survival.tsv` has 135 groups of samples with identical rows (a tumour and a normal from the same patient share one survival record). `copy_number_gistic.tsv.gz` has one group of four. The other files have none. So "two ids share a profile" is normal in some files, and the duplicate detector must only flag pairs that were **not** identical in the old release. |
+| How is a blank written? | As an empty cell, in the clinical and survival files (116,445 and 1,626 of them). The four molecular files have no blanks at all in release A, so a blank appearing there is itself a change. |
+| Are row names unique in the molecular files? | Yes. No protein or gene name is repeated. |
+
+Still not known:
+
+- How the hidden release is delivered, and which files it can change (a question for the organisers).
+- Timings on the demo laptop.
+- The cost of the cell-by-cell comparison, which does not exist yet.
