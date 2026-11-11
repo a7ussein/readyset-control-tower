@@ -144,7 +144,7 @@ export default function App() {
   const [error, setError] = useState('')
   useEffect(() => { loadFindings().then(setDoc).catch(e => setError(e instanceof Error ? e.message : String(e))) }, [])
 
-  const isDocValid = doc !== null && typeof doc === 'object' && !Array.isArray(doc)
+  const isDocValid: boolean = doc !== null && typeof doc === 'object' && !Array.isArray(doc)
   const typedDoc = isDocValid ? (doc as Findings) : null
 
   const releaseNames = typedDoc && Array.isArray(typedDoc.data?.releases)
@@ -174,7 +174,7 @@ export default function App() {
     <main>
       {error && <p className="error" role="alert">{error}</p>}
       {!doc && !error && <p className="muted">Loading findings…</p>}
-      {doc && !isDocValid && (
+      {doc !== undefined && !isDocValid && (
         <p className="error" role="alert">findings.json did not contain a result.</p>
       )}
       {typedDoc && <>
