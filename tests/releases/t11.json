@@ -1,0 +1,3 @@
+{"name": "t11-er-to-indeterminate", "seed": 111,
+ "changes": [{"type": "relabel_clinical", "file": "clinical.tsv",
+              "column": "breast_carcinoma_estrogen_receptor_status", "new_value": "Indeterminate", "count": 10}]}
