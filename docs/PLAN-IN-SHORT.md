@@ -63,7 +63,7 @@ Already answered (relayed by Ahmed, 10 Nov):
 - Ordi's OncoSys internship does not affect eligibility.
 
 ## Who does what
-- **Ahmed:** the engine. Makes the 24 tests pass, in the build order in the engine plan.
+- **Ahmed:** the engine. Built and merged; 44 tests pass. Next: whatever kickoff changes.
 - **James:** the one screen and the fresh-clone setup. Builds against the example file first.
 - **Ordi:** the test releases, the scorecard, the demo and the pitch.
 
