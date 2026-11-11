@@ -1,0 +1,2 @@
+{"name": "t2-protein-swap-same-er", "seed": 102,
+ "changes": [{"type": "swap_samples", "file": "protein_rppa.tsv.gz", "count": 1, "opposite_er": false}]}

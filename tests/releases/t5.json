@@ -1,0 +1,3 @@
+{"name": "t5-subtype-relabel", "seed": 105,
+ "changes": [{"type": "relabel_clinical", "file": "clinical.tsv",
+              "column": "PAM50Call_RNAseq", "new_value": "Basal", "count": 10}]}

@@ -1,0 +1,2 @@
+{"name": "t6-copynumber-swap", "seed": 106,
+ "changes": [{"type": "swap_samples", "file": "copy_number_gistic.tsv.gz", "count": 1, "opposite_er": true}]}
