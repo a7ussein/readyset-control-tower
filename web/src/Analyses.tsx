@@ -204,11 +204,22 @@ function AnalysisCard({ analysis }: { analysis: Analysis }) {
 }
 
 export function Analyses({ analyses }: { analyses?: unknown }) {
-  if (!Array.isArray(analyses) || analyses.length === 0) {
+  if (analyses === undefined || (Array.isArray(analyses) && analyses.length === 0)) {
     return (
       <section className="analyses-section" aria-label="Analyses">
         <h2>Analyses</h2>
         <p className="analyses-empty muted">No analyses in this file.</p>
+      </section>
+    )
+  }
+
+  if (!Array.isArray(analyses)) {
+    return (
+      <section className="analyses-section" aria-label="Analyses">
+        <h2>Analyses</h2>
+        <p className="error" role="alert">
+          The analyses in this file could not be read.
+        </p>
       </section>
     )
   }

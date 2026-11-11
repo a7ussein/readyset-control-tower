@@ -199,11 +199,22 @@ function FindingCard({ finding }: { finding: Finding }) {
 }
 
 export function FindingsList({ findings }: { findings?: unknown }) {
-  if (!Array.isArray(findings) || findings.length === 0) {
+  if (findings === undefined || (Array.isArray(findings) && findings.length === 0)) {
     return (
       <section className="findings-section" aria-label="Findings">
         <h2>Findings</h2>
         <p className="findings-empty muted">No findings in this file.</p>
+      </section>
+    )
+  }
+
+  if (!Array.isArray(findings)) {
+    return (
+      <section className="findings-section" aria-label="Findings">
+        <h2>Findings</h2>
+        <p className="error" role="alert">
+          The findings in this file could not be read.
+        </p>
       </section>
     )
   }

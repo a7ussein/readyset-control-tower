@@ -24,13 +24,31 @@ function getVerdictInfo(verdict?: string) {
 
 export function VerdictBanner({ doc }: { doc: Findings }) {
   const verdictInfo = typeof doc.verdict === 'string' ? getVerdictInfo(doc.verdict) : null
-  const findingsCount = Array.isArray(doc.findings) ? doc.findings.length : 0
+
+  const findingsPart =
+    doc.findings !== undefined && !Array.isArray(doc.findings)
+      ? 'findings could not be read'
+      : `${Array.isArray(doc.findings) ? doc.findings.length : 0} ${
+          Array.isArray(doc.findings) && doc.findings.length === 1 ? 'finding' : 'findings'
+        }`
+
   const analyses = Array.isArray(doc.analyses) ? doc.analyses : []
   const rerunCount = analyses.filter(a => a && typeof a === 'object' && a.status !== 'not_rerun').length
   const registeredCount = Array.isArray(doc.x_readyset?.analyses_registered)
     ? doc.x_readyset.analyses_registered.length
     : analyses.length
+
+  const analysesPart =
+    doc.analyses !== undefined && !Array.isArray(doc.analyses)
+      ? 'analyses could not be read'
+      : `${rerunCount} of ${registeredCount} analyses rerun`
+
   const repairsCount = Array.isArray(doc.repairs) ? doc.repairs.length : 0
+  const repairsPart =
+    doc.repairs !== undefined && !Array.isArray(doc.repairs)
+      ? 'proposed repairs could not be read'
+      : `${repairsCount} proposed ${repairsCount === 1 ? 'repair' : 'repairs'}`
+
   const runSeconds =
     typeof doc.x_readyset?.run_seconds === 'number' && !isNaN(doc.x_readyset.run_seconds)
       ? doc.x_readyset.run_seconds
@@ -47,9 +65,9 @@ export function VerdictBanner({ doc }: { doc: Findings }) {
         <p className="verdict-missing muted" role="status">This file has no verdict.</p>
       )}
       <p className="verdict-summary">
-        {findingsCount} {findingsCount === 1 ? 'finding' : 'findings'},{' '}
-        {rerunCount} of {registeredCount} analyses rerun,{' '}
-        {repairsCount} proposed {repairsCount === 1 ? 'repair' : 'repairs'}
+        {findingsPart},{' '}
+        {analysesPart},{' '}
+        {repairsPart}
         {typeof runSeconds === 'number' && ` · compared in ${runSeconds} s`}
       </p>
     </div>

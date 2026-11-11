@@ -162,7 +162,7 @@ export function Repairs({ repairs, findingIds }: RepairsProps) {
     ? findingIds
     : new Set<string>()
 
-  if (!Array.isArray(repairs) || repairs.length === 0) {
+  if (repairs === undefined || (Array.isArray(repairs) && repairs.length === 0)) {
     return (
       <section className="repairs-section" aria-label="Proposed repairs">
         <h2>Proposed repairs</h2>
@@ -170,6 +170,20 @@ export function Repairs({ repairs, findingIds }: RepairsProps) {
           Proposed by the tool. Nothing in the data has been changed.
         </p>
         <p className="repairs-empty muted">No proposed repairs in this file.</p>
+      </section>
+    )
+  }
+
+  if (!Array.isArray(repairs)) {
+    return (
+      <section className="repairs-section" aria-label="Proposed repairs">
+        <h2>Proposed repairs</h2>
+        <p className="repairs-subtitle muted">
+          Proposed by the tool. Nothing in the data has been changed.
+        </p>
+        <p className="error" role="alert">
+          The proposed repairs in this file could not be read.
+        </p>
       </section>
     )
   }
