@@ -1,0 +1,4 @@
+{"name": "t8-combined", "seed": 108,
+ "changes": [{"type": "swap_samples", "file": "protein_rppa.tsv.gz", "count": 1, "opposite_er": true},
+             {"type": "relabel_clinical", "file": "clinical.tsv", "column": "PAM50Call_RNAseq", "new_value": "Basal", "count": 5},
+             {"type": "swap_samples", "file": "rna_hiseq.tsv.gz", "count": 1, "opposite_er": true}]}

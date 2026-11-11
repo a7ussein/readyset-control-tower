@@ -1,0 +1,2 @@
+{"name": "t9-rna-dups-her2", "seed": 109,
+ "changes": [{"type": "replace_with_duplicates", "file": "rna_hiseq.tsv.gz", "count": 3, "subtype": "Her2"}]}

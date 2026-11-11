@@ -13,3 +13,5 @@ __pycache__/
 *.env
 node_modules/
 
+!tests/releases/
+scorecard-out/
