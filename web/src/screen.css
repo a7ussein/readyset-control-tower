@@ -1,0 +1,829 @@
+/* Screen Piece 1: Verdict Banner and File Strip */
+
+.verdict-banner {
+  margin: 18px 0 24px;
+}
+
+.verdict-mark {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+
+.verdict.unknown,
+.verdict.unknown .verdict-mark {
+  color: var(--muted);
+}
+
+.verdict-missing {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 18px 0 10px;
+}
+
+/* File Strip */
+
+.file-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0 24px;
+  padding: 0;
+  list-style: none;
+}
+
+.file-strip-empty {
+  font-size: 14px;
+  margin: 20px 0 24px;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.file-row.status-ready {
+  border-color: var(--line);
+}
+
+.file-row.status-conditional {
+  border-color: var(--conditional);
+  background: var(--conditional-tint);
+}
+
+.file-row.status-blocked {
+  border-color: var(--blocked);
+  background: var(--blocked-tint);
+}
+
+.file-row.status-neutral {
+  border-color: var(--line);
+}
+
+.file-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.file-mark.status-ready {
+  background: var(--ready);
+}
+
+.file-mark.status-conditional {
+  background: var(--conditional);
+}
+
+.file-mark.status-blocked {
+  background: var(--blocked);
+}
+
+.file-mark.status-neutral {
+  background: var(--muted);
+}
+
+.file-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.file-status {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.file-status.status-ready {
+  color: var(--ready);
+}
+
+.file-status.status-conditional {
+  color: var(--conditional);
+}
+
+.file-status.status-blocked {
+  color: var(--blocked);
+}
+
+.file-status.status-neutral {
+  color: var(--muted);
+}
+
+.file-opened {
+  font-size: 12px;
+  margin-left: auto;
+}
+
+
+
+/* Piece 2: Analyses Section */
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.analyses-section {
+  margin: 28px 0;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.analyses-section h2 {
+  font-size: 20px;
+  margin-bottom: 16px;
+}
+
+.analyses-empty {
+  font-size: 14px;
+  margin: 10px 0;
+}
+
+.analyses-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.analysis-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 16px 18px;
+}
+
+.analysis-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.analysis-header h3 {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.analysis-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.analysis-status.status-conditional {
+  color: var(--conditional);
+  background: var(--conditional-tint);
+}
+
+.analysis-status.status-ready {
+  color: var(--ready);
+  background: var(--ready-tint);
+}
+
+.analysis-status.status-neutral {
+  color: var(--muted);
+  background: var(--insufficient-tint);
+}
+
+.analysis-status-mark {
+  font-weight: 700;
+}
+
+.analysis-note {
+  font-size: 14px;
+  color: var(--muted);
+  margin: 6px 0 12px;
+  line-height: 1.45;
+}
+
+.analysis-missing-note {
+  font-size: 14px;
+  margin: 8px 0;
+}
+
+.analysis-table-wrap {
+  overflow-x: auto;
+  margin-top: 12px;
+}
+
+.analysis-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.analysis-table th {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.analysis-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.analysis-table .measure-name {
+  font-family: 'Red Hat Text Variable', sans-serif;
+  color: var(--ink);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.analysis-table .measure-val {
+  font-variant-numeric: tabular-nums;
+}
+
+.analysis-table tr.row-changed {
+  background: var(--conditional-tint);
+}
+
+.analysis-table tr.row-changed td,
+.analysis-table tr.row-changed th {
+  border-bottom-color: var(--conditional);
+}
+
+.change-word {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--conditional);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.row-change-cell {
+  text-align: right;
+  width: 70px;
+}
+
+
+/* Piece 3: Findings Section */
+
+.findings-section {
+  margin: 28px 0;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.findings-section h2 {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.findings-count-line {
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.findings-empty {
+  font-size: 14px;
+  margin: 10px 0;
+}
+
+.findings-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.finding-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 16px 18px;
+}
+
+.finding-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.finding-id {
+  font-weight: 700;
+  font-size: 14px;
+  padding: 2px 7px;
+  background: var(--brand-tint);
+  color: var(--brand);
+  border-radius: 4px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.badge-mark {
+  font-weight: 700;
+}
+
+.badge.severity-high {
+  background: var(--blocked-tint);
+  color: var(--blocked);
+  font-weight: 600;
+}
+
+.badge.severity-medium {
+  background: var(--conditional-tint);
+  color: var(--conditional);
+  font-weight: 600;
+}
+
+.badge.severity-low,
+.badge.severity-none,
+.badge.severity-neutral {
+  background: var(--insufficient-tint);
+  color: var(--muted);
+}
+
+.badge.kind-badge {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.badge.confidence-badge {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.badge.review-badge {
+  background: var(--conditional-tint);
+  color: var(--conditional);
+  font-weight: 600;
+}
+
+.finding-summary {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+  margin: 8px 0;
+  line-height: 1.45;
+}
+
+  .impact-line {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    margin: 8px 0;
+  }
+
+
+    .impact-part {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+      .analysis-chip {
+        padding: 1px 5px;
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        background: var(--surface);
+        font-size: 12px;
+      }
+
+      .finding-limitation {
+        font-size: 13px;
+        color: var(--muted);
+        margin: 8px 0 12px;
+        line-height: 1.4;
+        border-left: 2px solid var(--line);
+        padding-left: 10px;
+      }
+
+        .limitation-label {
+          font-weight: 600;
+          color: var(--ink);
+        }
+
+        .evidence-section {
+          margin-top: 12px;
+          padding-top: 10px;
+          border-top: 1px solid var(--line);
+        }
+
+          .evidence-header {
+            font-size: 13px;
+            margin-bottom: 8px;
+          }
+
+
+            .evidence-box {
+              margin-top: 6px;
+            }
+
+
+              .evidence-box.expanded-box {
+                max-height: 24rem;
+                overflow-y: auto;
+                border: 1px solid var(--line);
+                border-radius: 4px;
+                padding: 8px 12px;
+                background: var(--paper);
+              }
+
+
+                .pointers-list {
+                  margin: 0;
+                  padding: 0 0 0 18px;
+                  display: flex;
+                  flex-direction: column;
+                  gap: 6px;
+                  font-size: 13px;
+                }
+
+
+                  .pointer-item {
+                    color: var(--ink);
+                    line-height: 1.4;
+                  }
+
+
+                    .pointer-kind {
+                      color: var(--muted);
+                    }
+
+                      .pointer-note {
+                        color: var(--muted);
+                      }
+
+                        .evidence-toggle {
+                          margin-top: 8px;
+                          font-size: 13px;
+                        }
+
+
+/* Piece 4: Repairs Section */
+
+.repairs-section {
+  margin: 28px 0;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.repairs-section h2 {
+  font-size: 20px;
+  margin-bottom: 4px;
+}
+
+.repairs-subtitle {
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.repairs-empty {
+  font-size: 14px;
+  margin: 10px 0;
+}
+
+.repairs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.repair-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 16px 18px;
+}
+
+.repair-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.repair-id {
+  font-weight: 700;
+  font-size: 14px;
+  padding: 2px 7px;
+  background: var(--brand-tint);
+  color: var(--brand);
+  border-radius: 4px;
+}
+
+.badge.action-restore {
+  background: var(--ready-tint);
+  color: var(--ready);
+  font-weight: 600;
+}
+
+.badge.action-exclude {
+  background: var(--blocked-tint);
+  color: var(--blocked);
+  font-weight: 600;
+}
+
+.badge.action-review {
+  background: var(--conditional-tint);
+  color: var(--conditional);
+  font-weight: 600;
+}
+
+.badge.action-relabel {
+  background: var(--conditional-tint);
+  color: var(--conditional);
+  font-weight: 600;
+}
+
+.badge.action-neutral {
+  background: var(--insufficient-tint);
+  color: var(--muted);
+}
+
+.repair-addresses {
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.repair-address-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.finding-link {
+  text-decoration: none;
+  display: inline-block;
+}
+
+.finding-link:hover,
+.finding-link:focus,
+.finding-link:focus-visible {
+  text-decoration: underline;
+}
+
+.finding-link code {
+  padding: 2px 6px;
+  background: var(--brand-tint);
+  color: var(--brand);
+  border-radius: 3px;
+  font-weight: 700;
+  font-size: 12px;
+  border: 1px solid var(--line);
+}
+
+.finding-link:hover code,
+.finding-link:focus code,
+.finding-link:focus-visible code {
+  border-color: var(--brand);
+  text-decoration: underline;
+}
+
+.finding-missing code {
+  padding: 2px 6px;
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 3px;
+  font-size: 12px;
+  border: 1px solid var(--line);
+}
+
+.repair-justification {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink);
+  margin: 8px 0 12px;
+  line-height: 1.45;
+}
+
+.targets-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.targets-header {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.targets-box {
+  margin-top: 6px;
+}
+
+.targets-box.expanded-box {
+  max-height: 24rem;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 8px 12px;
+  background: var(--paper);
+}
+
+.targets-list {
+  margin: 0;
+  padding: 0 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.target-item {
+  color: var(--ink);
+  line-height: 1.4;
+}
+
+.target-kind {
+  color: var(--muted);
+}
+
+.target-loc {
+  color: var(--muted);
+}
+
+.target-note {
+  color: var(--muted);
+}
+
+.targets-toggle {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+/* Piece 5: Result Details & Download Section */
+
+.result-details-section {
+  margin: 28px 0;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.result-details-section h2 {
+  font-size: 20px;
+  margin-bottom: 12px;
+}
+
+.result-details-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.result-scope {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0;
+}
+
+.result-meta {
+  font-size: 13px;
+  margin: 0;
+}
+
+.result-checksums {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.checksums-summary {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.checksums-content {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.release-checksums-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.release-subheading {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0;
+}
+
+.checksums-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.checksum-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.checksum-file {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.checksum-sha {
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.checksum-hashof {
+  font-size: 12px;
+}
+
+.download-action {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.download-button {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.download-button:hover {
+  background: var(--brand-tint);
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.download-error {
+  font-size: 13px;
+  color: var(--blocked);
+  margin: 0;
+}
+
+.validator-note {
+  font-size: 13px;
+  margin: 0;
+}
+
+.findings-section .error,
+.analyses-section .error,
+.repairs-section .error {
+  margin: 12px 0;
+}

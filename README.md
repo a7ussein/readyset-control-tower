@@ -21,14 +21,29 @@ The comparison engine works and is tested. The page is still a shell that shows 
 
 You need Python 3.9 or newer and nothing else: no packages to install.
 
+### Quick start, no data and no install needed beyond Python 3.9+
+
+Clone the repository, then run:
+
 ```bash
-# 1. get the event data (from the organisers' challenge repo)
-python data/tcga-brca/fetch.py
+./run.sh        # http://localhost:8010  (run.bat on Windows)
+```
 
-# 2. compare two releases: the trusted one first
-python3 -m control_tower compare path/to/release-A path/to/release-B --out findings.json
+It opens http://localhost:8010 showing the hand-written example (`docs/example-findings.json`). Note that this example uses completely invented data.
 
-# 3. look at the result in the page
+### Comparing real releases
+
+The event data is fetched with the organisers' `fetch.py` from their challenge repository (https://github.com/disleveK/oncosys-hackathon-challenge). No data files are committed to this repository.
+
+TODO (Ahmed to confirm): exact fetch steps and where to put the downloaded folders.
+
+Once you have the releases, compare them (the trusted release first):
+
+```bash
+# Compare two releases (RELEASE_A and RELEASE_B are paths to two release folders):
+python3 -m control_tower compare RELEASE_A RELEASE_B --out findings.json
+
+# Look at the result in the page:
 ./run.sh serve --findings findings.json        # http://localhost:8010  (run.bat on Windows)
 ```
 
@@ -36,6 +51,18 @@ python3 -m control_tower compare path/to/release-A path/to/release-B --out findi
 0 Ready, 1 Conditional, 2 Blocked, 3 Insufficient Evidence.
 
 Run the tests with `python3 -m unittest discover -s tests -t .`
+
+### Changing the page
+
+Only needed by people who edit the frontend (requires Node.js):
+
+```bash
+cd web
+npm install
+npm run dev          # live reload on http://localhost:5173
+```
+
+After a change, run `npm run build` and commit `web/dist` so nobody needs Node to run the tool.
 
 ## Data
 
