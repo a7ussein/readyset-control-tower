@@ -1,3 +1,3 @@
 {"name": "t7-unread-relabel", "seed": 107,
  "changes": [{"type": "relabel_clinical", "file": "clinical.tsv",
-              "column": "YOUR_COLUMN", "new_value": "A_VALUE_IT_HOLDS", "count": 10}]}
+              "column": "PR_Status_nature2012", "new_value": "Negative", "count": 10}]}
