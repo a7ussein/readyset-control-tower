@@ -154,7 +154,16 @@ Run on 10 Nov on the event's frozen release, standard library only.
   subtype relabelled): 5.75 seconds, including the 180 MB RNA file. It reported exactly those three changes: the
   relabel affecting A2, the protein swap affecting A1, and the RNA swap affecting neither. Both analyses were rerun.
 - **Both outputs pass the organisers' validator.**
-- Not yet run: the organisers' practice release B. That is the blind test, to be done with the team.
+- **The organisers' practice release B, run blind** (answer key unopened until afterwards): 0.75 seconds. It reported
+  one swap, five copied samples and five samples gone, all in the protein file, with A1 changed and A2 untouched. Checked
+  against the answer key afterwards: the two swapped samples, the five removed samples, and all five copies each paired
+  with the right source match exactly, with nothing extra reported.
+- After the blind run we read the organisers' reference output and aligned the shape of ours with it: a duplicate
+  finding lists the copies only, a membership finding lists who left and says which subgroup lost coverage (Her2, 5),
+  and before/after hold the same keys as theirs.
+- Two differences from their reference output remain, both questions for the organisers: they mark A2 `unchanged`
+  (rerun, same result) where we mark it `not_rerun`; and they rate the membership finding `medium` where our rule makes
+  it `high` because A1's result moved.
 
 Two things the build added to this plan:
 

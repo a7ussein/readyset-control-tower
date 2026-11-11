@@ -110,8 +110,23 @@ def _profile(file, sample):
     return {"scope": "profile", "file": file, "sample": sample}
 
 
-def compare_file(file, path_a, path_b, rel_a, rel_b):
-    """Raw findings for one file whose content differs between the two releases."""
+def _subgroups(samples, describe):
+    """'by RNA subtype: Her2 5; by ER status: Negative 3, Positive 2' for a set of samples, from their clinical record."""
+    if not describe or not samples:
+        return ""
+    parts = []
+    for label, values in describe(samples).items():
+        counts = Counter(v for v in values if v)
+        if counts:
+            parts.append(f"by {label}: " + ", ".join(f"{k} {n}" for k, n in counts.most_common()))
+    return "; ".join(parts)
+
+
+def compare_file(file, path_a, path_b, rel_a, rel_b, describe=None):
+    """Raw findings for one file whose content differs between the two releases.
+
+    `describe(samples)` may return {label: [value per sample]} from the clinical record, used to say which
+    subgroups lost coverage."""
     kind_a, kind_b = release.layout(path_a), release.layout(path_b)
     if kind_a != kind_b:
         raise release.Unreadable(f"{file} is laid out differently in the two releases")
@@ -200,12 +215,12 @@ def compare_file(file, path_a, path_b, rel_a, rel_b):
 
     if c["copies"]:
         copies = c["copies"]
-        sources = sorted({src for _, src in copies})
+        # The copies are the evidence. The sample each one copies is named in its note, not listed as a sample of its
+        # own: the source did nothing wrong, and listing it would look like a tenth changed sample.
         evidence = [_sample(copy, file, rel_b,
                             f"identical to {src} in {rel_b}; " + (f"this id is not in {rel_a}" if copy not in fp_a
                                                                  else f"it held different values in {rel_a}"))
                     for copy, src in copies]
-        evidence += [_sample(src, file, rel_b, "the profile that was copied") for src in sources]
         brand_new = [cp for cp, _ in copies if cp not in fp_a]
         overwritten = [cp for cp, _ in copies if cp in fp_a]
         targets, action, why = [], "exclude", []
@@ -229,8 +244,10 @@ def compare_file(file, path_a, path_b, rel_a, rel_b):
 
     renamed_old = {o for o, _ in c["renames"]}
     renamed_new = {n for _, n in c["renames"]}
-    if c["gone"] or c["new"]:
-        gone, new = c["gone"], c["new"]
+    copied_ids = {cp for cp, _ in c["copies"]}
+    arrivals = [s for s in c["new"] if s not in copied_ids]      # a new id that is a copy is in the duplicate finding
+    if c["gone"] or arrivals:
+        gone, new = c["gone"], arrivals
         evidence = [_sample(s, file, rel_a, f"in {rel_a}, absent from {rel_b}"
                             + (f"; its profile now appears under {dict(c['renames'])[s]}" if s in renamed_old else ""))
                     for s in gone]
@@ -238,7 +255,12 @@ def compare_file(file, path_a, path_b, rel_a, rel_b):
                              + (f"; carries the {rel_a} profile of {dict((n, o) for o, n in c['renames'])[s]}"
                                 if s in renamed_new else ""))
                      for s in new]
-        if len(gone) == len(new) and gone:
+        lost = _subgroups(gone, describe)
+        same_count = len(fp_a) == len(fp_b)
+        if gone and same_count and not new:
+            lead = (f"{file} has the same number of samples in both releases, but {_plural(len(gone), 'sample')} from "
+                    f"{rel_a} {'is' if len(gone) == 1 else 'are'} gone, replaced by other ids")
+        elif len(gone) == len(new) and gone:
             lead = (f"{file} has the same number of samples in both releases, but {_plural(len(gone), 'sample')} from "
                     f"{rel_a} {'is' if len(gone) == 1 else 'are'} gone and {_plural(len(new), 'new id')} appeared")
         else:
@@ -252,6 +274,8 @@ def compare_file(file, path_a, path_b, rel_a, rel_b):
         if c["renames"]:
             lead += f". {_plural(len(c['renames']), 'new id')} carry the unchanged profile of a sample that left, " \
                     f"which looks like a rename"
+        if lost:
+            lead += f". Coverage lost, {lost}"
         truly_gone = [s for s in gone if s not in renamed_old]
         repair = None
         if truly_gone:

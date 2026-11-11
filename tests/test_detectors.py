@@ -104,9 +104,11 @@ class Detectors(unittest.TestCase):
     def test_a_copied_sample_under_a_new_id_with_another_removed(self):
         self.run_pair(lambda b: b.copy_as(PROTEIN, P1, NEW1, replacing=N2))    # same count as before
         dup = self.only("duplicate")
-        self.assertEqual(samples(dup), sorted([P1, NEW1]))
+        self.assertEqual(samples(dup), [NEW1])                                 # the copy; its source is named in the note
+        self.assertIn(P1, dup["evidence"][0]["note"])
         mem = self.only("membership_change")
-        self.assertEqual(samples(mem), sorted([N2, NEW1]))                     # who left, who arrived
+        self.assertEqual(samples(mem), [N2])                                   # who left; the arrival is the copy above
+        self.assertIn("Basal 1", mem["summary"])                               # which subgroup lost coverage
         # The new id has no clinical record, so A1 never reads the copy. What moves A1 is the sample that left.
         self.assertEqual((dup["affects_analyses"], mem["affects_analyses"]), ([], ["A1"]))
         self.assertEqual(self.analysis("A1")["status"], "changed")
@@ -115,7 +117,7 @@ class Detectors(unittest.TestCase):
     def test_a_copy_landing_on_an_id_that_has_a_clinical_record_does_affect_a1(self):
         self.run_pair(lambda b: b.copy_as(PROTEIN, N1, CLIN_ONLY))             # an ER-positive id now carries an ER-negative profile
         dup = self.only("duplicate")
-        self.assertEqual(samples(dup), sorted([N1, CLIN_ONLY]))
+        self.assertEqual(samples(dup), [CLIN_ONLY])
         self.assertEqual((dup["affects_analyses"], dup["severity"]), (["A1"], "high"))
         a1 = self.analysis("A1")
         self.assertEqual((a1["status"], a1["after"]["n_positive"]), ("changed", 4))
@@ -130,7 +132,7 @@ class Detectors(unittest.TestCase):
             return b
         self.run_pair(overwrite)
         dup = self.only("duplicate")
-        self.assertEqual((samples(dup), dup["affects_analyses"]), (sorted([P2, N1]), ["A1"]))
+        self.assertEqual((samples(dup), dup["affects_analyses"]), ([P2], ["A1"]))
 
     def test_samples_that_were_already_identical_are_not_called_duplicates(self):
         doc = self.run_pair(lambda b: b.relabel("OS.time", N1, "301", file=SURVIVAL))

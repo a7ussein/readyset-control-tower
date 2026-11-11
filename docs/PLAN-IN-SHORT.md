@@ -38,7 +38,8 @@ need nothing that isn't in that file. If it does, tell Ahmed and the file gets a
   run on a tiny invented dataset of eight samples, so anyone can check an expected answer by eye.
 - **A first working engine** (Ahmed got ahead of the Thursday start). It passes all the tests, gives the organisers'
   own A1 numbers on release A, and on a changed copy of the real data found exactly what was planted in under six
-  seconds. It has not been run on the organisers' practice release yet; that blind test is for the three of us.
+  seconds. **Run blind on the organisers' practice release, it matched the answer key exactly** (the swap, the five
+  removed samples, the five copies and their sources, nothing extra) in under a second.
 
 ## Decisions we need from the team
 1. **The verdict rule.** Ready = nothing changed. Conditional = things changed, we reran what was affected, a person

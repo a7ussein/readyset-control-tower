@@ -10,7 +10,7 @@ import time
 from datetime import datetime, timezone
 
 from . import __version__, release
-from .analyses import REGISTRY, CannotRun
+from .analyses import ER, PAM50, REGISTRY, CannotRun
 from .detect import compare_file
 from .release import FILES, PROTEIN
 
@@ -41,6 +41,7 @@ def compare(folder_a, folder_b):
     raw, files_info, hashes = [], [], {rel_a: [], rel_b: []}
     insufficient = False
 
+    describe = _describer(folder_a, folder_b)
     for file in FILES:
         pa, pb = release.path_of(folder_a, file), release.path_of(folder_b, file)
         if not pa and not pb:
@@ -77,7 +78,7 @@ def compare(folder_a, folder_b):
             files_info.append({"file": file, "status": "unchanged", "opened": False})
             continue
         try:
-            raw += compare_file(file, pa, pb, rel_a, rel_b)
+            raw += compare_file(file, pa, pb, rel_a, rel_b, describe)
             files_info.append({"file": file, "status": "changed", "opened": True})
         except release.Unreadable as e:
             files_info.append({"file": file, "status": "unreadable", "opened": True})
@@ -104,7 +105,7 @@ def compare(folder_a, folder_b):
         entry = {"id": a.id}
         try:
             before = a.run(folder_a)
-            entry["before"] = before
+            entry["before"] = _clean(before)
         except (CannotRun, release.Unreadable, OSError, EOFError, UnicodeDecodeError) as e:
             before = None
             entry["note"] = f"Could not be run on {rel_a}: {e}."
@@ -118,7 +119,7 @@ def compare(folder_a, folder_b):
             entry["_because"] = because
             analyses.append(entry)
             continue
-        entry["after"] = after
+        entry["after"] = _clean(after)
         entry["status"] = "unchanged" if before == after else "changed"
         status_of[a.id] = entry["status"]
         entry["_because"] = because
@@ -175,6 +176,31 @@ def compare(folder_a, folder_b):
             "files": files_info,
             "scope": SCOPE},
     }
+
+
+def _describer(folder_a, folder_b):
+    """A function that says which clinical subgroups a set of samples belongs to, from the trusted release's clinical
+    record (falling back to the new one). Used to report which subgroup lost coverage."""
+    table = {}
+    for folder in (folder_b, folder_a):                    # the trusted release wins where both have the sample
+        path = release.path_of(folder, release.CLINICAL)
+        if path:
+            try:
+                table.update(release.read_rows(path)[1])
+            except release.Unreadable:
+                pass
+    if not table:
+        return None
+
+    def describe(samples):
+        return {"RNA subtype": [table.get(s, {}).get(PAM50, "") for s in samples],
+                "ER status": [table.get(s, {}).get(ER, "") for s in samples]}
+    return describe
+
+
+def _clean(result):
+    """Before and after hold the result's numbers only, as in the organisers' own output."""
+    return {k: v for k, v in result.items() if k not in ("analysis", "inputs", "n_ids_listed")}
 
 
 def _unreadable(file, rel, why):

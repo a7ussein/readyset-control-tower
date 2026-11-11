@@ -48,9 +48,17 @@ Each finding is one thing that changed, of one kind.
 | `needs_human_review` | Always present. `true` for every finding that is not purely informational. |
 
 One change, one kind. When a sample fits more than one pattern, the order of precedence is: swap, then duplicate, then
-membership change, then relabel, then missing data, then `other`. The example shows the one deliberate overlap: a
-copied sample under a new id is reported as a `duplicate` (F2) **and** its id appears in the `membership_change`
-finding (F3), because both statements are true and a reviewer needs both.
+membership change, then relabel, then missing data, then `other`.
+
+Which samples a finding lists, matching the organisers' own reference output:
+
+- A `duplicate` finding lists the **copies** only. The sample each one copies is named in that pointer's `note`, not
+  listed as a sample itself.
+- A `membership_change` finding lists the samples that **left**, and any id that arrived with values of its own. A new
+  id that is a copy appears only in the `duplicate` finding. Its summary says which clinical subgroups lost coverage
+  ("by RNA subtype: Her2 5").
+
+(The hand-written example file predates this rule and lists both; the engine follows the rule above.)
 
 ### Analyses
 One entry per registered analysis, always. Today that is A1 and A2.
@@ -61,8 +69,9 @@ One entry per registered analysis, always. Today that is A1 and A2.
 | `unchanged` | Rerun because a finding touched its inputs; the result is the same. | Both present and equal. |
 | `not_rerun` | No finding touches a file, column, row or sample it reads. | Absent. |
 
-- `before` and `after` are exactly what the organisers' `reference_analyses.py` prints for that analysis on each
-  release (including `n_ids_listed`), so anyone can reproduce them with one command.
+- `before` and `after` hold the numbers the organisers' `reference_analyses.py` prints for that analysis on each
+  release (`n_samples`, the group sizes, the means and the difference for A1; `n_samples`, `counts` and `percent` for
+  A2), so anyone can reproduce them with one command.
 - `note` (our addition) says in one sentence why it was or was not rerun, naming the findings.
 
 ### Repairs
