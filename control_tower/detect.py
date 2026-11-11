@@ -18,7 +18,7 @@ from . import release
 from .release import CLINICAL, EMPTY, PROTEIN, sample_type
 
 TYPE_NAMES = {"01": "primary tumour", "11": "normal tissue", "06": "metastasis"}
-MAX_DETAILED = 400          # beyond this many unexplained samples in one file, report them without cell detail
+MAX_CELLS = 200_000         # beyond this many differing cells in one file, stop listing them and report the samples as a group
 KEY_KIND = {PROTEIN: "protein"}
 
 
@@ -85,6 +85,9 @@ def classify(fp_a, fp_b):
             continue
         kept = [s for s in holders if fp_a.get(s) == f]
         fresh = [s for s in holders if fp_a.get(s) != f and s not in in_cycle and s not in renamed_new]
+        # Twins before and twins now: two samples that were already identical and changed together are not copies.
+        fresh = [s for s in fresh
+                 if not any(h != s and fp_a.get(h) is not None and fp_a.get(h) == fp_a.get(s) for h in holders)]
         if not fresh:
             continue
         if kept:
@@ -141,6 +144,13 @@ def compare_file(file, path_a, path_b, rel_a, rel_b, describe=None):
 
         def cells(samples):
             return ({s: table_a[s] for s in samples}, {s: table_b[s] for s in samples})
+
+        def differences(samples):
+            for s in samples:
+                for key in shared:
+                    a, b = table_a[s].get(key, ""), table_b[s].get(key, "")
+                    if a != b:
+                        yield s, key, a, b
         key_word, scope = "column", "column"
     else:
         names_a, names_b = release.row_names(path_a), release.row_names(path_b)
@@ -155,6 +165,9 @@ def compare_file(file, path_a, path_b, rel_a, rel_b, describe=None):
         def cells(samples):
             wanted = set(samples)
             return (release.column_cells(path_a, wanted, shared_set), release.column_cells(path_b, wanted, shared_set))
+
+        def differences(samples):
+            return release.column_differences(path_a, path_b, set(samples), shared_set, in_order)
         key_word, scope = "row", "row"
 
     # A whole row or column that appeared or disappeared.
@@ -293,31 +306,34 @@ def compare_file(file, path_a, path_b, rel_a, rel_b, describe=None):
 
     # Samples whose values changed and match nobody: look at the cells.
     unexplained = c["unexplained"]
-    if len(unexplained) > MAX_DETAILED:
+    hits, too_many = [], False
+    if unexplained:
+        for hit in differences(unexplained):
+            hits.append(hit)
+            if len(hits) > MAX_CELLS:
+                too_many = True
+                break
+    if too_many:
         findings.append({
             "kind": "other", "file": file, "confidence": "low",
             "summary": f"{len(unexplained)} samples in {file} hold different values in {rel_b} and match no known "
-                       f"pattern. There are too many to compare cell by cell in this run.",
+                       f"pattern. More than {MAX_CELLS:,} cells differ, too many to list one by one.",
             "evidence": [_sample(s, file, rel_b, "values differ") for s in unexplained]
                         + [{"kind": "file", "id": file, "release": rel_b, "note": f"content differs from {rel_a}"}],
             "changes": [_profile(file, s) for s in unexplained],
-            "limitation": "The tool can show that these samples changed. It did not examine which cells.",
+            "limitation": "The tool can show that these samples changed. It stopped listing individual cells once "
+                          "the count passed its limit, so it cannot say which kinds of change are among them.",
             "repair": {"action": "flag_for_review", "targets": [{"kind": "file", "id": file, "release": rel_b}],
                        "justification": "A large part of this file changed in a way the tool cannot classify."}})
-    elif unexplained:
-        old, new_cells = cells(unexplained)
+    elif hits:
         blanked, relabelled, other = defaultdict(list), defaultdict(list), []
-        for s in unexplained:
-            for key in shared:
-                a, b = old[s].get(key, ""), new_cells[s].get(key, "")
-                if a == b:
-                    continue
-                if a not in EMPTY and b in EMPTY:
-                    blanked[key if kind_a == "row" else None].append((s, key, a, b))
-                elif file == CLINICAL:
-                    relabelled[key].append((s, key, a, b))
-                else:
-                    other.append((s, key, a, b))
+        for s, key, a, b in hits:
+            if a not in EMPTY and b in EMPTY:
+                blanked[key if kind_a == "row" else None].append((s, key, a, b))
+            elif file == CLINICAL:
+                relabelled[key].append((s, key, a, b))
+            else:
+                other.append((s, key, a, b))
 
         for key, hits in sorted(blanked.items(), key=lambda kv: str(kv[0])):
             who = sorted({s for s, *_ in hits})

@@ -194,6 +194,25 @@ def column_cells(path, wanted, keep):
     return out
 
 
+def column_differences(path_a, path_b, wanted, keep, in_order):
+    """Yield (sample, row name, old text, new text) for every cell that differs, for the samples in `wanted`.
+
+    The two files are walked in step, row by row, so memory depends on how much differs, not on how big the files
+    are. The caller can stop early."""
+    head_a, head_b = header_of(path_a), header_of(path_b)
+    at_a = {s: i + 1 for i, s in enumerate(head_a[1:]) if s in wanted}
+    at_b = {s: i + 1 for i, s in enumerate(head_b[1:]) if s in wanted}
+    pairs = [(s, at_a[s], at_b[s]) for s in sorted(at_a) if s in at_b]
+    for row_a, row_b in zip(_lines(path_a, keep, in_order), _lines(path_b, keep, in_order)):
+        name = row_a[0]
+        la, lb = len(row_a), len(row_b)
+        for s, i, j in pairs:
+            a = row_a[i] if i < la else ""
+            b = row_b[j] if j < lb else ""
+            if a != b:
+                yield s, name, a, b
+
+
 def one_row(path, name):
     """(sample ids, {sample id: text}) for a single named row, or (sample ids, None) if the row is not there."""
     header = header_of(path)

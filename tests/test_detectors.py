@@ -139,6 +139,12 @@ class Detectors(unittest.TestCase):
         self.assertNotIn("duplicate", self.kinds())                            # P1 and its normal share a survival row in both releases
         self.assertEqual(self.files()[SURVIVAL]["status"], "changed")
 
+    def test_twins_that_change_together_are_not_copies(self):
+        # P1 and its normal tissue share one survival record. When that record is updated, both rows change the same way.
+        self.run_pair(lambda b: b.relabel("OS.time", P1, "1300", file=SURVIVAL).relabel("OS.time", NORMAL, "1300", file=SURVIVAL))
+        self.assertEqual(self.kinds(), ["other"])
+        self.assertEqual(samples(self.only("other")), sorted([P1, NORMAL]))
+
     def test_a_sample_that_only_left_is_a_membership_change(self):
         self.run_pair(lambda b: b.remove(PROTEIN, P3))
         self.assertEqual(samples(self.only("membership_change")), [P3])
@@ -196,6 +202,29 @@ class Detectors(unittest.TestCase):
         self.run_pair(lambda b: b.set_cell(MUTATION, "TP53", P1, "1"))
         f = self.only("other")
         self.assertEqual((samples(f), f["confidence"], f["needs_human_review"]), ([P1], "low", True))
+
+    def test_when_too_many_cells_differ_the_samples_are_reported_as_a_group_not_dropped(self):
+        from control_tower import detect
+        saved, detect.MAX_CELLS = detect.MAX_CELLS, 2
+        try:
+            self.run_pair(lambda b: b.set_cell(MUTATION, "TP53", P1, "1").set_cell(MUTATION, "GATA3", P1, "1")
+                          .set_cell(MUTATION, "TP53", N1, "0").set_cell(MUTATION, "PIK3CA", N2, "0"))
+        finally:
+            detect.MAX_CELLS = saved
+        f = self.only("other")
+        self.assertEqual(samples(f), sorted([P1, N1, N2]))                     # every changed sample is still named
+        self.assertIn("too many to list", f["summary"])
+        self.assertEqual((f["confidence"], f["needs_human_review"]), ("low", True))
+
+    def test_a_relabel_of_every_sample_is_still_a_relabel(self):
+        def everyone(b):
+            for s in list(b.by_row[CLINICAL][2]):
+                b.relabel(HISTOLOGY, s, "Recoded")
+            return b
+        self.run_pair(everyone)
+        f = self.only("label_conflict")
+        self.assertEqual(len(samples(f)), 9)
+        self.assertEqual(f["affects_analyses"], [])
 
     # ---- 6. structure -------------------------------------------------------------------------------
     def test_a_file_missing_from_the_new_release_is_insufficient_evidence(self):

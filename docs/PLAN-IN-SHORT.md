@@ -34,12 +34,15 @@ need nothing that isn't in that file. If it does, tell Ahmed and the file gets a
 ## What exists today
 - The output contract and the example file.
 - The engine plan, with seven detectors described in one sentence each.
-- 41 tests, 27 of which say exactly what the engine must report for each kind of change. They
+- 44 tests, 30 of which say exactly what the engine must report for each kind of change. They
   run on a tiny invented dataset of eight samples, so anyone can check an expected answer by eye.
 - **A first working engine** (Ahmed got ahead of the Thursday start). It passes all the tests, gives the organisers'
   own A1 numbers on release A, and on a changed copy of the real data found exactly what was planted in under six
   seconds. **Run blind on the organisers' practice release, it matched the answer key exactly** (the swap, the five
   removed samples, the five copies and their sources, nothing extra) in under a second.
+- **Ahmed's own checks of the engine**, run on his machine: releases built with the organisers' script, and changes
+  their script cannot make, alone, combined and at scale. All passed, slowest under six seconds. These were to trust
+  the engine, not to replace the team's testing. **The test releases and the scorecard are Ordi's to design and build.**
 
 ## Decisions we need from the team
 1. **The verdict rule.** Ready = nothing changed. Conditional = things changed, we reran what was affected, a person

@@ -1,6 +1,6 @@
 # Engine plan
 
-Status: **built.** The engine in `control_tower/` follows this plan; 41 tests pass. Section 8 says how it did on the
+Status: **built.** The engine in `control_tower/` follows this plan; 44 tests pass. Section 8 says how it did on the
 real files. The rules below are still open to change by the team.
 
 The engine takes two release folders and writes `findings.json` as described in
@@ -158,6 +158,28 @@ Run on 10 Nov on the event's frozen release, standard library only.
   one swap, five copied samples and five samples gone, all in the protein file, with A1 changed and A2 untouched. Checked
   against the answer key afterwards: the two swapped samples, the five removed samples, and all five copies each paired
   with the right source match exactly, with nothing extra reported.
+- **Eleven test releases built with the organisers' script**, as a check on Ahmed's machine: no change; a protein swap across ER
+  groups and one inside a group; copies in the protein file; relabels of ER status, the RNA subtype and an unread
+  column; a swap in copy number; copies in the RNA file; three changes at once; four swaps in one file. All eleven
+  pass: every planted change found, nothing extra, before and after equal to the organisers' analysis script, and
+  every analysis we left alone confirmed unmoved by that script. Slowest run 5.4 seconds.
+- **Sixteen changes their script cannot make**, written onto the real release by our own mutator
+  (a local script): ER-alpha and another protein blanked; one ER-alpha number edited; a sample renamed; the
+  ER-alpha row dropped (Blocked) and another row dropped; rows and columns reordered with no value changed (Ready, no
+  findings); mutation cells flipped; two normal-tissue samples swapped in RNA; two patients' clinical records
+  exchanged (A1 changed, A2 rerun and unchanged); a clinical record deleted; a clinical column added; ER status
+  blanked; a survival time edited; a corrupt protein file and a missing one (Insufficient Evidence). All sixteen pass,
+  slowest 5.2 seconds. To prove the scorer can fail, the engine was sabotaged in one run (nothing affects A1): every
+  A1-dependent case failed, including the cross-check against the organisers' analysis script.
+- **Seven more, for combinations and scale:** four of our own kinds across three files at once; a swap, a copy, a
+  blanked value and a relabel together; ER status relabelled for 300 samples; an unread column relabelled for 700; every
+  ER-alpha value shifted; every one of the 25 million cells in the RNA file rewritten (5.6 seconds, reported as one
+  finding naming all 1,218 samples); and a patient's shared survival record updated. All pass, making 23 of 23.
+- Writing those tests found and fixed two problems. The cap on cell-by-cell comparison was a count of samples, which
+  would have mislabelled a large clinical relabel and held millions of cells in memory for the RNA file; the comparison
+  now walks both files in step and keeps only the cells that differ, stopping its list at 200,000. And two samples that
+  were already identical and changed together (a tumour and its normal sharing a survival record) were being called a
+  copy; twins before and twins after are no longer flagged.
 - After the blind run we read the organisers' reference output and aligned the shape of ours with it: a duplicate
   finding lists the copies only, a membership finding lists who left and says which subgroup lost coverage (Her2, 5),
   and before/after hold the same keys as theirs.
