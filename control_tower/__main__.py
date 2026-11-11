@@ -38,7 +38,7 @@ def cmd_compare(args):
     x = doc["x_readyset"]
     print(f"{doc['verdict']}   ({x['run_seconds']} s)")
     for f in x["files"]:
-        print(f"  {f['status']:14} {f['file']}")
+        print(f"  {f['status']:14} {f['file']}" + ("   (same values, different bytes)" if f.get("note") else ""))
     for f in doc["findings"]:
         hit = ", ".join(f["affects_analyses"]) or "no registered analysis"
         print(f"  {f['id']:4} {f['kind']:18} {f['severity']:6} affects {hit}: {f['summary']}")

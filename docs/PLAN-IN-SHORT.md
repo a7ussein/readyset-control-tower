@@ -34,7 +34,7 @@ need nothing that isn't in that file. If it does, tell Ahmed and the file gets a
 ## What exists today
 - The output contract and the example file.
 - The engine plan, with seven detectors described in one sentence each.
-- 44 tests, 30 of which say exactly what the engine must report for each kind of change. They
+- 46 tests, 32 of which say exactly what the engine must report for each kind of change. They
   run on a tiny invented dataset of eight samples, so anyone can check an expected answer by eye.
 - **A first working engine** (Ahmed got ahead of the Thursday start). It passes all the tests, gives the organisers'
   own A1 numbers on release A, and on a changed copy of the real data found exactly what was planted in under six
@@ -63,7 +63,7 @@ Already answered (relayed by Ahmed, 10 Nov):
 - Ordi's OncoSys internship does not affect eligibility.
 
 ## Who does what
-- **Ahmed:** the engine. Built and merged; 44 tests pass. Next: whatever kickoff changes.
+- **Ahmed:** the engine. Built and merged; 46 tests pass. Next: whatever kickoff changes.
 - **James:** the one screen and the fresh-clone setup. Builds against the example file first.
 - **Ordi:** the test releases, the scorecard, the demo and the pitch.
 

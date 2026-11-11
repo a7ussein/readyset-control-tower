@@ -103,7 +103,8 @@ The format allows extra keys. Ours all sit under one key, `x_readyset`, so anoth
 | Key | For |
 |---|---|
 | `run_seconds`, `generated_at`, `engine_version` | The verdict banner. |
-| `files[]` with `status` and `opened` | The per-file line on the screen. `status` is `changed`, `unchanged` (never opened), `absent` (in neither release), `missing_in_one`, or `unreadable`. |
+| `files[]` with `status` and `opened` | The per-file line on the screen. `status` is `changed`, `unchanged` (never opened), `absent` (in neither release), `missing_in_one`, or `unreadable`. A changed file with no findings also has a `note`: its bytes differ but every value is the same (line endings, or row or column order). |
+| `witness` | Keyed by finding id, for findings about samples in a large file: one named `row` (ER-alpha in the protein file, otherwise the file's first row) and each sample's `before` and `after` value in it. A value is `null` where the sample is not in that release. A reader can open the two files and check the finding by eye. |
 | `analyses_registered` | States the tool's scope in data. |
 | `scope` | The limitation sentence shown on screen. |
 | `example_notice` | Only in the hand-written example. |

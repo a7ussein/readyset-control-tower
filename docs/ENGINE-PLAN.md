@@ -1,6 +1,6 @@
 # Engine plan
 
-Status: **built.** The engine in `control_tower/` follows this plan; 44 tests pass. Section 8 says how it did on the
+Status: **built.** The engine in `control_tower/` follows this plan; 46 tests pass. Section 8 says how it did on the
 real files. The rules below are still open to change by the team.
 
 The engine takes two release folders and writes `findings.json` as described in

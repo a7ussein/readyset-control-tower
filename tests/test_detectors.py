@@ -56,6 +56,20 @@ class Detectors(unittest.TestCase):
         doc = self.run_pair(lambda b: b.reorder_columns(PROTEIN))
         self.assertEqual(doc["findings"], [])
         self.assertEqual(self.files()[PROTEIN]["status"], "changed")           # the bytes differ; no sample does
+        self.assertIn("every value is the same", self.files()[PROTEIN]["note"])
+
+    def test_a_file_with_findings_carries_no_same_values_note(self):
+        self.run_pair(lambda b: b.swap(PROTEIN, P1, N1))
+        self.assertNotIn("note", self.files()[PROTEIN])
+
+    def test_a_swap_comes_with_the_two_values_a_reader_can_check_by_hand(self):
+        doc = self.run_pair(lambda b: b.swap(PROTEIN, P1, N1))
+        w = doc["x_readyset"]["witness"][self.only("sample_swap")["id"]]
+        self.assertEqual((w["file"], w["row"]), (PROTEIN, "ERALPHA"))
+        v = {x["sample"]: (x["before"], x["after"]) for x in w["values"]}
+        self.assertEqual(v[P1][0], v[N1][1])                                   # each now holds the other's value
+        self.assertEqual(v[N1][0], v[P1][1])
+        self.assertNotEqual(v[P1][0], v[P1][1])
 
     # ---- 2. swap ------------------------------------------------------------------------------------
     def test_a_swap_across_er_groups_names_both_samples_and_changes_a1(self):

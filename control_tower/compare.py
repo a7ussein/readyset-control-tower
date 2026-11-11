@@ -6,15 +6,19 @@ Cheapest work first: hash every file; open only the ones whose content differs; 
 touches.
 """
 import os
+import re
 import time
 from datetime import datetime, timezone
 
 from . import __version__, release
-from .analyses import ER, PAM50, REGISTRY, CannotRun
+from .analyses import ER, ER_ROW, PAM50, REGISTRY, CannotRun
 from .detect import compare_file
 from .release import FILES, PROTEIN
 
 PRODUCER = {"team": "Automyte", "product": "Cohort Control Tower", "track": "cohort-firewall"}
+SAME_VALUES = ("The file's bytes differ but every value is the same (for example line endings, or the order of rows "
+               "or columns), so there is nothing to report.")
+WITNESS_SAMPLES = 12
 SCOPE = ("Protects only the analyses registered in the tool (A1, A2). Reports what changed between two releases, "
          "not why. Research use only; no clinical claims.")
 
@@ -78,8 +82,12 @@ def compare(folder_a, folder_b):
             files_info.append({"file": file, "status": "unchanged", "opened": False})
             continue
         try:
-            raw += compare_file(file, pa, pb, rel_a, rel_b, describe)
-            files_info.append({"file": file, "status": "changed", "opened": True})
+            found = compare_file(file, pa, pb, rel_a, rel_b, describe)
+            raw += found
+            info = {"file": file, "status": "changed", "opened": True}
+            if not found:
+                info["note"] = SAME_VALUES
+            files_info.append(info)
         except release.Unreadable as e:
             files_info.append({"file": file, "status": "unreadable", "opened": True})
             insufficient = True
@@ -141,6 +149,7 @@ def compare(folder_a, folder_b):
             if r:
                 repairs.append({"id": f"R{len(repairs) + 1}", "action": r["action"], "targets": r["targets"],
                                 "justification": r["justification"], "addresses": [fid]})
+    witness = _witness(raw, folder_a, folder_b, rel_a, rel_b)
     for entry in analyses:
         because = entry.pop("_because", None)
         if because is not None and "note" not in entry:
@@ -174,8 +183,45 @@ def compare(folder_a, folder_b):
             "run_seconds": round(time.time() - started, 2),
             "analyses_registered": [a.id for a in REGISTRY],
             "files": files_info,
+            "witness": witness,
             "scope": SCOPE},
     }
+
+
+def _witness(raw, folder_a, folder_b, rel_a, rel_b):
+    """For each finding about samples in a large file: one named row, with each sample's value in both releases.
+
+    A reader can open the two files, find that row, and check the finding by eye. The row is the one an analysis
+    reads when the file has one (ER-alpha in the protein file), otherwise the file's first row."""
+    out, rows = {}, {}
+    for i, f in enumerate(raw, 1):
+        file = f.get("file")
+        ids = [e["id"] for e in f["evidence"] if e["kind"] == "sample"]
+        for e in f["evidence"]:                          # a copy's source is named in its note
+            m = re.match(r"identical to (TCGA-\S+)", e.get("note", "")) if e["kind"] == "sample" else None
+            if m and m.group(1) not in ids:
+                ids.append(m.group(1))
+        pa, pb = release.path_of(folder_a, file or ""), release.path_of(folder_b, file or "")
+        if not ids or not pa or not pb:
+            continue
+        try:
+            if file not in rows:
+                if release.layout(pa) != "column" or release.layout(pb) != "column":
+                    rows[file] = None
+                else:
+                    names = release.row_names(pa)
+                    name = ER_ROW if (file == PROTEIN and ER_ROW in names) else (names[0] if names else None)
+                    rows[file] = name and (name, release.one_row(pa, name)[1], release.one_row(pb, name)[1])
+            if not rows[file] or rows[file][1] is None or rows[file][2] is None:
+                continue
+        except (release.Unreadable, OSError, EOFError, UnicodeDecodeError, StopIteration):
+            rows[file] = None
+            continue
+        name, in_a, in_b = rows[file]
+        out[f"F{i}"] = {"file": file, "row": name, "releases": [rel_a, rel_b],
+                        "values": [{"sample": s, "before": in_a.get(s), "after": in_b.get(s)}
+                                   for s in ids[:WITNESS_SAMPLES]]}
+    return out
 
 
 def _describer(folder_a, folder_b):
