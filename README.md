@@ -10,15 +10,26 @@ writes `findings.json` in the organisers' shared format.
 
 ## Status
 
-Planning. No engine code yet: the team agrees the plan before anyone builds.
+Planning, plus the page's shell. No comparison engine yet: the team agrees the plan before anyone builds it.
 
-- [`docs/OUTPUT-CONTRACT.md`](docs/OUTPUT-CONTRACT.md): the draft rules for `findings.json`.
+- [`docs/PLAN-IN-SHORT.md`](docs/PLAN-IN-SHORT.md): the plan in two minutes.
+- [`docs/OUTPUT-CONTRACT.md`](docs/OUTPUT-CONTRACT.md): the rules for `findings.json`.
 - [`docs/example-findings.json`](docs/example-findings.json): a hand-written example that passes the organisers'
   validator. Every id and number in it is invented.
+- [`docs/ENGINE-PLAN.md`](docs/ENGINE-PLAN.md): how the engine will work, with measurements on the real files.
+- [`web/README.md`](web/README.md): the page, and how to work on it.
 
 ## Setup and run
 
-To be written once the tool exists. It will work from a fresh clone using only the steps on this page.
+You need Python 3.9 or newer and nothing else.
+
+```bash
+./run.sh          # the page at http://localhost:8010, showing the example findings (run.bat on Windows)
+python3 -m unittest discover -s tests -t .
+```
+
+Today the page is a shell that shows the hand-written example. Running the tool on two real releases will be added
+here once the engine exists.
 
 ## Data
 
