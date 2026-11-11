@@ -35,15 +35,19 @@ It opens http://localhost:8010 showing the hand-written example (`docs/example-f
 
 The event data is fetched with the organisers' `fetch.py` from their challenge repository (https://github.com/disleveK/oncosys-hackathon-challenge). No data files are committed to this repository.
 
-Get the data and the practice release, in a folder next to this one (the organisers' scripts need pandas; our tool does not):
+Get the data and the practice release, in a folder next to this one. The organisers' scripts need pandas and jsonschema, installed here in a virtual environment; our tool needs neither.
 
 ```bash
 git clone https://github.com/disleveK/oncosys-hackathon-challenge.git
 cd oncosys-hackathon-challenge
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate                  # Windows: .venv\Scripts\activate
+pip install pandas jsonschema
 python data/tcga-brca/fetch.py             # the trusted release, into data/tcga-brca/raw/, checksums verified
 python data/tcga-brca/make_release.py      # practice release B, into data/tcga-brca/releases/practice-B/
 ```
+
+On a Mac with Python from python.org, `fetch.py` can fail with `SSL: CERTIFICATE_VERIFY_FAILED`. Run `/Applications/Python 3.x/Install Certificates.command` once (3.x is your Python version), then run `fetch.py` again.
 
 The two folders can stay where they are: `compare` takes paths. `releases/practice-B/CHANGES.json` is the answer key, so do not open it until the tool has run.
 
