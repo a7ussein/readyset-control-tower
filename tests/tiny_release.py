@@ -19,6 +19,7 @@ U1 = "TCGA-T1-0006-01"
 NORMAL = "TCGA-T1-0001-11"          # normal tissue from the same patient as P1
 MET = "TCGA-T1-0007-06"             # a metastasis
 NEW1, NEW2 = "TCGA-T1-0091-01", "TCGA-T1-0092-01"   # ids that are in no file of the trusted release
+CLIN_ONLY = "TCGA-T1-0008-01"       # a primary tumour with a clinical record and no molecular data
 
 CLINICAL, SURVIVAL = "clinical.tsv", "survival.tsv"
 PROTEIN, MUTATION = "protein_rppa.tsv.gz", "mutation_gene_level.tsv.gz"
@@ -46,7 +47,8 @@ class TinyRelease:
                 N2: {ER: "Negative", PAM50: "Basal", HISTOLOGY: "Ductal"},
                 U1: {ER: "", PAM50: "Her2", HISTOLOGY: "Ductal"},
                 NORMAL: {ER: "Positive", PAM50: "Normal", HISTOLOGY: ""},
-                MET: {ER: "Positive", PAM50: "", HISTOLOGY: "Ductal"}}),
+                MET: {ER: "Positive", PAM50: "", HISTOLOGY: "Ductal"},
+                CLIN_ONLY: {ER: "Positive", PAM50: "", HISTOLOGY: "Ductal"}}),
             # A tumour and a normal from one patient share a survival record: identical rows are NORMAL here.
             SURVIVAL: ("sample", ["_PATIENT", "OS", "OS.time"], {
                 P1: {"_PATIENT": "TCGA-T1-0001", "OS": "0", "OS.time": "1200"},

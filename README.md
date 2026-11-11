@@ -10,26 +10,32 @@ writes `findings.json` in the organisers' shared format.
 
 ## Status
 
-Planning, plus the page's shell. No comparison engine yet: the team agrees the plan before anyone builds it.
+The comparison engine works and is tested. The page is still a shell that shows one findings file.
 
 - [`docs/PLAN-IN-SHORT.md`](docs/PLAN-IN-SHORT.md): the plan in two minutes.
 - [`docs/OUTPUT-CONTRACT.md`](docs/OUTPUT-CONTRACT.md): the rules for `findings.json`.
-- [`docs/example-findings.json`](docs/example-findings.json): a hand-written example that passes the organisers'
-  validator. Every id and number in it is invented.
-- [`docs/ENGINE-PLAN.md`](docs/ENGINE-PLAN.md): how the engine will work, with measurements on the real files.
+- [`docs/ENGINE-PLAN.md`](docs/ENGINE-PLAN.md): how the engine works, with measurements on the real files.
 - [`web/README.md`](web/README.md): the page, and how to work on it.
 
 ## Setup and run
 
-You need Python 3.9 or newer and nothing else.
+You need Python 3.9 or newer and nothing else: no packages to install.
 
 ```bash
-./run.sh          # the page at http://localhost:8010, showing the example findings (run.bat on Windows)
-python3 -m unittest discover -s tests -t .
+# 1. get the event data (from the organisers' challenge repo)
+python data/tcga-brca/fetch.py
+
+# 2. compare two releases: the trusted one first
+python3 -m control_tower compare path/to/release-A path/to/release-B --out findings.json
+
+# 3. look at the result in the page
+./run.sh serve --findings findings.json        # http://localhost:8010  (run.bat on Windows)
 ```
 
-Today the page is a shell that shows the hand-written example. Running the tool on two real releases will be added
-here once the engine exists.
+`compare` prints the verdict, one line per file, each finding and which analyses were rerun. Its exit code is
+0 Ready, 1 Conditional, 2 Blocked, 3 Insufficient Evidence.
+
+Run the tests with `python3 -m unittest discover -s tests -t .`
 
 ## Data
 

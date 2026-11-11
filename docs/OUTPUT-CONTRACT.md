@@ -94,7 +94,7 @@ The format allows extra keys. Ours all sit under one key, `x_readyset`, so anoth
 | Key | For |
 |---|---|
 | `run_seconds`, `generated_at`, `engine_version` | The verdict banner. |
-| `files[]` with `status` (`changed` / `unchanged`) and `opened` | The per-file line on the screen. An unchanged file is never opened. |
+| `files[]` with `status` and `opened` | The per-file line on the screen. `status` is `changed`, `unchanged` (never opened), `absent` (in neither release), `missing_in_one`, or `unreadable`. |
 | `analyses_registered` | States the tool's scope in data. |
 | `scope` | The limitation sentence shown on screen. |
 | `example_notice` | Only in the hand-written example. |

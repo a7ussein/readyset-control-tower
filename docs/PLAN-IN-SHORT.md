@@ -34,9 +34,11 @@ need nothing that isn't in that file. If it does, tell Ahmed and the file gets a
 ## What exists today
 - The output contract and the example file.
 - The engine plan, with seven detectors described in one sentence each.
-- 24 tests that say exactly what the engine must report for each kind of change, written before any engine code. They
+- 41 tests, 27 of which say exactly what the engine must report for each kind of change. They
   run on a tiny invented dataset of eight samples, so anyone can check an expected answer by eye.
-- **No engine code.** That starts Thursday 1:30 PM, once the plan is agreed.
+- **A first working engine** (Ahmed got ahead of the Thursday start). It passes all the tests, gives the organisers'
+  own A1 numbers on release A, and on a changed copy of the real data found exactly what was planted in under six
+  seconds. It has not been run on the organisers' practice release yet; that blind test is for the three of us.
 
 ## Decisions we need from the team
 1. **The verdict rule.** Ready = nothing changed. Conditional = things changed, we reran what was affected, a person

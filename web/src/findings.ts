@@ -24,6 +24,6 @@ export interface Findings {
   x_readyset?: {
     example_notice?: string; engine_version?: string; generated_at?: string; run_seconds?: number
     analyses_registered?: string[]; scope?: string
-    files?: { file: string; status: 'changed' | 'unchanged'; opened: boolean }[]
+    files?: { file: string; status: 'changed' | 'unchanged' | 'absent' | 'missing_in_one' | 'unreadable'; opened: boolean }[]
   }
 }

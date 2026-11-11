@@ -1,8 +1,7 @@
 # Engine plan
 
-Status: **draft for the team to agree.** Written from the organisers' code and briefs, then checked against the
-event's frozen release (downloaded with `fetch.py`; all six checksums matched). Section 7 lists what was measured.
-No engine code exists yet.
+Status: **built.** The engine in `control_tower/` follows this plan; 41 tests pass. Section 8 says how it did on the
+real files. The rules below are still open to change by the team.
 
 The engine takes two release folders and writes `findings.json` as described in
 [`OUTPUT-CONTRACT.md`](OUTPUT-CONTRACT.md). This page says how.
@@ -143,6 +142,26 @@ Each step has its test written first. Cut from the bottom if time runs out.
 10. Repair proposals
 11. Missing data
 12. Catch-all
+
+## 8. How the engine did on the real release
+
+Run on 10 Nov on the event's frozen release, standard library only.
+
+- **A1 matches the organisers' numbers.** Ours gives 529 ER-positive tumours with mean 2.179 and 169 ER-negative with
+  mean -0.872. Their starter shows 2.18 and -0.87.
+- **Release A against itself:** Ready in 0.64 seconds; no file opened.
+- **Release A against a copy we changed ourselves** (two protein samples swapped, two RNA samples swapped, one RNA
+  subtype relabelled): 5.75 seconds, including the 180 MB RNA file. It reported exactly those three changes: the
+  relabel affecting A2, the protein swap affecting A1, and the RNA swap affecting neither. Both analyses were rerun.
+- **Both outputs pass the organisers' validator.**
+- Not yet run: the organisers' practice release B. That is the blind test, to be done with the team.
+
+Two things the build added to this plan:
+
+- **A copy needs most of the sample to have changed.** In a small file, editing one cell can make a sample equal to
+  another by coincidence. An existing sample is only called a copy when at least half of its cells differ from before.
+- **An unreadable file is never a crash.** A file that cannot be read as a table gives a finding and the verdict
+  Insufficient Evidence.
 
 ## 7. What the real files showed
 

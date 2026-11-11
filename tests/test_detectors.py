@@ -9,7 +9,7 @@ import os
 import tempfile
 import unittest
 
-from tests.tiny_release import (A1_BEFORE, A2_BEFORE, CLINICAL, COPY_NUMBER, ER, HISTOLOGY, MET, MUTATION, N1, N2,
+from tests.tiny_release import (A1_BEFORE, A2_BEFORE, CLIN_ONLY, CLINICAL, COPY_NUMBER, ER, HISTOLOGY, MET, MUTATION, N1, N2,
                                 NEW1, NEW2, NORMAL, P1, P2, P3, PAM50, PROTEIN, RNA, SURVIVAL, U1, TinyRelease)
 
 try:
@@ -107,9 +107,30 @@ class Detectors(unittest.TestCase):
         self.assertEqual(samples(dup), sorted([P1, NEW1]))
         mem = self.only("membership_change")
         self.assertEqual(samples(mem), sorted([N2, NEW1]))                     # who left, who arrived
-        self.assertEqual((dup["affects_analyses"], mem["affects_analyses"]), (["A1"], ["A1"]))
+        # The new id has no clinical record, so A1 never reads the copy. What moves A1 is the sample that left.
+        self.assertEqual((dup["affects_analyses"], mem["affects_analyses"]), ([], ["A1"]))
         self.assertEqual(self.analysis("A1")["status"], "changed")
         self.assertEqual(self.analysis("A1")["after"]["n_negative"], 1)
+
+    def test_a_copy_landing_on_an_id_that_has_a_clinical_record_does_affect_a1(self):
+        self.run_pair(lambda b: b.copy_as(PROTEIN, N1, CLIN_ONLY))             # an ER-positive id now carries an ER-negative profile
+        dup = self.only("duplicate")
+        self.assertEqual(samples(dup), sorted([N1, CLIN_ONLY]))
+        self.assertEqual((dup["affects_analyses"], dup["severity"]), (["A1"], "high"))
+        a1 = self.analysis("A1")
+        self.assertEqual((a1["status"], a1["after"]["n_positive"]), ("changed", 4))
+
+    def test_one_edited_cell_that_happens_to_match_another_sample_is_not_a_copy(self):
+        self.run_pair(lambda b: b.set_cell(MUTATION, "TP53", P1, "1"))         # P1 now equals P3 in this tiny file
+        self.assertEqual(self.kinds(), ["other"])
+
+    def test_an_existing_sample_overwritten_with_another_samples_values_is_a_copy(self):
+        def overwrite(b):
+            b.by_col[PROTEIN][2][P2] = list(b.by_col[PROTEIN][2][N1])
+            return b
+        self.run_pair(overwrite)
+        dup = self.only("duplicate")
+        self.assertEqual((samples(dup), dup["affects_analyses"]), (sorted([P2, N1]), ["A1"]))
 
     def test_samples_that_were_already_identical_are_not_called_duplicates(self):
         doc = self.run_pair(lambda b: b.relabel("OS.time", N1, "301", file=SURVIVAL))
