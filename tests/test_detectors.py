@@ -1,0 +1,217 @@
+"""What the engine must report for each kind of change. Written before the engine.
+
+Every test builds two tiny releases (tests/tiny_release.py), runs `control_tower.compare(folder_a, folder_b)` and
+checks the findings document it returns, which has the shape in docs/OUTPUT-CONTRACT.md.
+
+Until the engine exists these tests are skipped, not failed.
+"""
+import os
+import tempfile
+import unittest
+
+from tests.tiny_release import (A1_BEFORE, A2_BEFORE, CLINICAL, COPY_NUMBER, ER, HISTOLOGY, MET, MUTATION, N1, N2,
+                                NEW1, NEW2, NORMAL, P1, P2, P3, PAM50, PROTEIN, RNA, SURVIVAL, U1, TinyRelease)
+
+try:
+    from control_tower import compare
+except ImportError:                     # the engine is not written yet
+    compare = None
+
+
+def samples(finding):
+    return sorted({e["id"] for e in finding["evidence"] if e["kind"] == "sample"})
+
+
+@unittest.skipIf(compare is None, "the engine (control_tower.compare) does not exist yet")
+class Detectors(unittest.TestCase):
+    def run_pair(self, change):
+        a = TinyRelease()
+        b = change(a.copy())
+        d = tempfile.mkdtemp()
+        self.doc = compare(a.write(os.path.join(d, "A")), b.write(os.path.join(d, "B")))
+        return self.doc
+
+    def kinds(self):
+        return sorted(f["kind"] for f in self.doc["findings"])
+
+    def only(self, kind):
+        found = [f for f in self.doc["findings"] if f["kind"] == kind]
+        self.assertEqual(len(found), 1, f"expected exactly one {kind} finding, got {self.kinds()}")
+        return found[0]
+
+    def analysis(self, name):
+        return next(a for a in self.doc["analyses"] if a["id"] == name)
+
+    def files(self):
+        return {f["file"]: f for f in self.doc["x_readyset"]["files"]}
+
+    # ---- 1. nothing changed -------------------------------------------------------------------------
+    def test_identical_releases_are_ready_and_no_file_is_opened(self):
+        doc = self.run_pair(lambda b: b)
+        self.assertEqual((doc["findings"], doc["verdict"]), ([], "Ready"))
+        self.assertTrue(all(f["status"] == "unchanged" and not f["opened"] for f in self.files().values()))
+        self.assertEqual([a["status"] for a in doc["analyses"]], ["not_rerun", "not_rerun"])
+
+    def test_columns_in_a_different_order_is_not_a_change_to_any_sample(self):
+        doc = self.run_pair(lambda b: b.reorder_columns(PROTEIN))
+        self.assertEqual(doc["findings"], [])
+        self.assertEqual(self.files()[PROTEIN]["status"], "changed")           # the bytes differ; no sample does
+
+    # ---- 2. swap ------------------------------------------------------------------------------------
+    def test_a_swap_across_er_groups_names_both_samples_and_changes_a1(self):
+        self.run_pair(lambda b: b.swap(PROTEIN, P1, N1))
+        f = self.only("sample_swap")
+        self.assertEqual(samples(f), sorted([P1, N1]))
+        self.assertEqual((f["affects_analyses"], f["not_affected_analyses"], f["severity"]), (["A1"], ["A2"], "high"))
+        a1 = self.analysis("A1")
+        self.assertEqual(a1["status"], "changed")
+        for k, v in A1_BEFORE.items():
+            self.assertEqual(a1["before"][k], v, k)
+        self.assertEqual(a1["after"]["mean_positive"], 0.933)                  # (-1.0 + 2.0 + 1.8) / 3
+        self.assertEqual(a1["after"]["mean_negative"], 0.7)                    # (2.2 - 0.8) / 2
+        self.assertEqual(self.analysis("A2")["status"], "not_rerun")
+        self.assertEqual(self.doc["verdict"], "Conditional")
+        self.assertEqual(self.kinds(), ["sample_swap"])                        # nothing else is reported for it
+
+    def test_a_swap_inside_one_er_group_reruns_a1_and_finds_it_unchanged(self):
+        self.run_pair(lambda b: b.swap(PROTEIN, P1, P2))
+        f = self.only("sample_swap")
+        self.assertEqual((f["affects_analyses"], f["severity"]), (["A1"], "medium"))
+        a1 = self.analysis("A1")
+        self.assertEqual(a1["status"], "unchanged")
+        self.assertEqual(a1["before"], a1["after"])
+
+    def test_a_swap_in_a_file_no_analysis_reads_affects_neither(self):
+        self.run_pair(lambda b: b.swap(COPY_NUMBER, P1, N1))
+        f = self.only("sample_swap")
+        self.assertEqual((f["affects_analyses"], f["not_affected_analyses"], f["severity"]), ([], ["A1", "A2"], "low"))
+        self.assertEqual([a["status"] for a in self.doc["analyses"]], ["not_rerun", "not_rerun"])
+        self.assertFalse(self.files()[RNA]["opened"])
+
+    def test_a_swap_between_samples_a1_does_not_use_does_not_affect_it(self):
+        self.run_pair(lambda b: b.swap(PROTEIN, MET, U1))                      # a metastasis and a tumour with no ER status
+        self.assertEqual(self.only("sample_swap")["affects_analyses"], [])
+
+    def test_three_samples_rotated_is_one_finding_naming_all_three(self):
+        def rotate(b):
+            t = b.by_col[PROTEIN][2]
+            t[P1], t[P2], t[N1] = t[P2], t[N1], t[P1]
+            return b
+        self.run_pair(rotate)
+        self.assertEqual(samples(self.only("sample_swap")), sorted([P1, P2, N1]))
+
+    # ---- 3. duplicate and membership ----------------------------------------------------------------
+    def test_a_copied_sample_under_a_new_id_with_another_removed(self):
+        self.run_pair(lambda b: b.copy_as(PROTEIN, P1, NEW1, replacing=N2))    # same count as before
+        dup = self.only("duplicate")
+        self.assertEqual(samples(dup), sorted([P1, NEW1]))
+        mem = self.only("membership_change")
+        self.assertEqual(samples(mem), sorted([N2, NEW1]))                     # who left, who arrived
+        self.assertEqual((dup["affects_analyses"], mem["affects_analyses"]), (["A1"], ["A1"]))
+        self.assertEqual(self.analysis("A1")["status"], "changed")
+        self.assertEqual(self.analysis("A1")["after"]["n_negative"], 1)
+
+    def test_samples_that_were_already_identical_are_not_called_duplicates(self):
+        doc = self.run_pair(lambda b: b.relabel("OS.time", N1, "301", file=SURVIVAL))
+        self.assertNotIn("duplicate", self.kinds())                            # P1 and its normal share a survival row in both releases
+        self.assertEqual(self.files()[SURVIVAL]["status"], "changed")
+
+    def test_a_sample_that_only_left_is_a_membership_change(self):
+        self.run_pair(lambda b: b.remove(PROTEIN, P3))
+        self.assertEqual(samples(self.only("membership_change")), [P3])
+        self.assertEqual(self.kinds(), ["membership_change"])
+
+    def test_a_renamed_sample_is_one_membership_finding_not_a_duplicate(self):
+        self.run_pair(lambda b: b.rename(PROTEIN, P3, NEW2))
+        self.assertEqual(samples(self.only("membership_change")), sorted([P3, NEW2]))
+        self.assertEqual(self.kinds(), ["membership_change"])
+
+    def test_a_normal_tissue_row_leaving_the_clinical_file_affects_neither(self):
+        self.run_pair(lambda b: b.remove(CLINICAL, NORMAL))
+        self.assertEqual(self.only("membership_change")["affects_analyses"], [])
+
+    # ---- 4. relabel ---------------------------------------------------------------------------------
+    def test_er_status_relabelled_affects_a1_only(self):
+        self.run_pair(lambda b: b.relabel(ER, P1, "Negative").relabel(ER, P2, "Negative"))
+        f = self.only("label_conflict")
+        self.assertEqual(samples(f), sorted([P1, P2]))                         # one finding for the column, both samples
+        self.assertEqual((f["affects_analyses"], f["not_affected_analyses"]), (["A1"], ["A2"]))
+        self.assertEqual(self.analysis("A1")["after"]["n_positive"], 1)
+        self.assertEqual(self.analysis("A2")["status"], "not_rerun")
+
+    def test_rna_subtype_relabelled_affects_a2_only(self):
+        self.run_pair(lambda b: b.relabel(PAM50, N1, "LumA"))
+        f = self.only("label_conflict")
+        self.assertEqual((f["affects_analyses"], f["not_affected_analyses"]), (["A2"], ["A1"]))
+        a2 = self.analysis("A2")
+        self.assertEqual(a2["status"], "changed")
+        self.assertEqual(a2["before"]["counts"], A2_BEFORE["counts"])
+        self.assertEqual(a2["after"]["counts"], {"Basal": 1, "Her2": 1, "LumA": 4})
+        self.assertEqual(self.analysis("A1")["status"], "not_rerun")
+
+    def test_a_column_neither_analysis_reads_affects_neither(self):
+        self.run_pair(lambda b: b.relabel(HISTOLOGY, P1, "Lobular"))
+        f = self.only("label_conflict")
+        self.assertEqual((f["affects_analyses"], f["not_affected_analyses"], f["severity"]), ([], ["A1", "A2"], "low"))
+
+    def test_er_status_relabelled_for_a_sample_with_no_protein_data_does_not_affect_a1(self):
+        self.run_pair(lambda b: b.relabel(ER, NORMAL, "Negative"))             # the normal is not in the protein file
+        self.assertEqual(self.only("label_conflict")["affects_analyses"], [])
+
+    # ---- 5. missing data and the catch-all ----------------------------------------------------------
+    def test_a_value_that_became_blank_is_missing_data(self):
+        self.run_pair(lambda b: b.set_cell(PROTEIN, "ERALPHA", P1, ""))
+        f = self.only("missing_data")
+        self.assertEqual((samples(f), f["affects_analyses"]), ([P1], ["A1"]))
+        self.assertTrue(any(e["kind"] == "protein" and e["id"] == "ERALPHA" for e in f["evidence"]))
+
+    def test_a_blanked_cell_in_a_row_a1_does_not_read_does_not_affect_it(self):
+        self.run_pair(lambda b: b.set_cell(PROTEIN, "HER2", P1, ""))
+        self.assertEqual(self.only("missing_data")["affects_analyses"], [])
+
+    def test_a_changed_value_no_detector_explains_is_reported_not_dropped(self):
+        self.run_pair(lambda b: b.set_cell(MUTATION, "TP53", P1, "1"))
+        f = self.only("other")
+        self.assertEqual((samples(f), f["confidence"], f["needs_human_review"]), ([P1], "low", True))
+
+    # ---- 6. structure -------------------------------------------------------------------------------
+    def test_a_file_missing_from_the_new_release_is_insufficient_evidence(self):
+        doc = self.run_pair(lambda b: b.without_file(PROTEIN))
+        self.assertEqual(doc["verdict"], "Insufficient Evidence")
+        self.assertTrue(any(e["kind"] == "file" and e["id"] == PROTEIN for f in doc["findings"] for e in f["evidence"]))
+
+    def test_the_rna_file_missing_from_both_releases_is_fine(self):
+        a, b = TinyRelease().without_file(RNA), TinyRelease().without_file(RNA)
+        d = tempfile.mkdtemp()
+        doc = compare(a.write(os.path.join(d, "A")), b.write(os.path.join(d, "B")))
+        self.assertEqual((doc["findings"], doc["verdict"]), ([], "Ready"))
+
+    def test_the_row_a1_needs_being_gone_blocks(self):
+        doc = self.run_pair(lambda b: b.drop_row(PROTEIN, "ERALPHA"))
+        self.assertEqual(doc["verdict"], "Blocked")
+        self.assertIn("A1", [a for f in doc["findings"] for a in f["affects_analyses"]])
+
+    # ---- 7. several at once, and the rules every output obeys ---------------------------------------
+    def test_three_changes_at_once_are_three_separate_findings(self):
+        self.run_pair(lambda b: b.swap(PROTEIN, P1, N1).relabel(PAM50, N2, "LumA").set_cell(MUTATION, "TP53", P2, "1"))
+        self.assertEqual(self.kinds(), ["label_conflict", "other", "sample_swap"])
+        self.assertEqual([a["status"] for a in self.doc["analyses"]], ["changed", "changed"])
+
+    def test_every_finding_obeys_the_contract(self):
+        self.run_pair(lambda b: b.swap(PROTEIN, P1, N1).copy_as(PROTEIN, P2, NEW1, replacing=N2).relabel(HISTOLOGY, P3, "Ductal"))
+        doc = self.doc
+        self.assertEqual(doc["format_version"], "0.2")
+        self.assertEqual(doc["producer"], {"team": "Automyte", "product": "Cohort Control Tower", "track": "cohort-firewall"})
+        self.assertEqual([len(r["files"]) for r in doc["data"]["releases"]], [6, 6])
+        self.assertTrue(all(f["hash_of"] == "content" for r in doc["data"]["releases"] for f in r["files"]))
+        ids = {f["id"] for f in doc["findings"]}
+        for f in doc["findings"]:
+            self.assertEqual(sorted(f["affects_analyses"] + f["not_affected_analyses"]), ["A1", "A2"], f["id"])
+            self.assertTrue(f["limitation"] and isinstance(f["needs_human_review"], bool), f["id"])
+            self.assertTrue(all(len(s) == 15 for s in samples(f)), f["id"])
+        for r in doc.get("repairs", []):
+            self.assertTrue(r["addresses"] and set(r["addresses"]) <= ids, r["id"])     # never an unsupported repair
+
+
+if __name__ == "__main__":
+    unittest.main()
