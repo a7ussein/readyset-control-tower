@@ -35,13 +35,24 @@ It opens http://localhost:8010 showing the hand-written example (`docs/example-f
 
 The event data is fetched with the organisers' `fetch.py` from their challenge repository (https://github.com/disleveK/oncosys-hackathon-challenge). No data files are committed to this repository.
 
-TODO (Ahmed to confirm): exact fetch steps and where to put the downloaded folders.
+Get the data and the practice release, in a folder next to this one (the organisers' scripts need pandas; our tool does not):
+
+```bash
+git clone https://github.com/disleveK/oncosys-hackathon-challenge.git
+cd oncosys-hackathon-challenge
+pip install -r requirements.txt
+python data/tcga-brca/fetch.py             # the trusted release, into data/tcga-brca/raw/, checksums verified
+python data/tcga-brca/make_release.py      # practice release B, into data/tcga-brca/releases/practice-B/
+```
+
+The two folders can stay where they are: `compare` takes paths. `releases/practice-B/CHANGES.json` is the answer key, so do not open it until the tool has run.
 
 Once you have the releases, compare them (the trusted release first):
 
 ```bash
-# Compare two releases (RELEASE_A and RELEASE_B are paths to two release folders):
-python3 -m control_tower compare RELEASE_A RELEASE_B --out findings.json
+# Compare two releases, from this repository's folder (RELEASE_A is the trusted one):
+D=../oncosys-hackathon-challenge/data/tcga-brca
+python3 -m control_tower compare $D/raw $D/releases/practice-B --out findings.json
 
 # Look at the result in the page:
 ./run.sh serve --findings findings.json        # http://localhost:8010  (run.bat on Windows)
