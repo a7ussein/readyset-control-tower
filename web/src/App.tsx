@@ -6,6 +6,7 @@ import './screen.css'
 import { loadFindings, usingExample } from './api'
 import type { Findings } from './findings'
 import { useTheme } from './theme'
+import { Analyses } from './Analyses'
 
 function getVerdictInfo(verdict?: string) {
   if (!verdict) return null
@@ -133,11 +134,13 @@ export default function App() {
         <VerdictBanner doc={doc} />
         <FileStrip files={doc.x_readyset?.files} />
 
+        {/* Piece 2: Analyses */}
+        <Analyses analyses={doc.analyses} />
+
         {/* Pieces still to build:
-            1. analyses: before and after, or "not rerun" with its note
-            2. findings: severity, confidence, sample ids, affects / does not affect, limitation, review flag
-            3. repairs: proposed repairs, each tied to the findings it addresses
-            4. download: export of findings.json with the validator's result
+            1. findings: severity, confidence, sample ids, affects / does not affect, limitation, review flag
+            2. repairs: proposed repairs, each tied to the findings it addresses
+            3. download: export of findings.json with the validator's result
         */}
         <ul>{(doc.findings ?? []).map(f => <li key={f.id}><code>{f.id}</code> {f.summary}</li>)}</ul>
       </>}
