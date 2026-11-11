@@ -66,18 +66,24 @@ function getCountLine(items: Finding[]): string {
 function FindingCard({ finding }: { finding: Finding }) {
   const [expanded, setExpanded] = useState(false)
   const sev = getSeverityBadge(finding.severity)
-  const evidence: Pointer[] = Array.isArray(finding.evidence) ? finding.evidence : []
+  const rawEvidence = Array.isArray(finding.evidence) ? finding.evidence : []
+  const evidence: Pointer[] = rawEvidence.filter(
+    (p): p is Pointer => Boolean(p && typeof p === 'object' && !Array.isArray(p))
+  )
   const count = evidence.length
   const INITIAL_LIMIT = 6
   const displayed = expanded ? evidence : evidence.slice(0, INITIAL_LIMIT)
   const hasMore = count > INITIAL_LIMIT
 
-  const affects = Array.isArray(finding.affects_analyses) ? finding.affects_analyses : []
-  const notAffects = Array.isArray(finding.not_affected_analyses)
+  const rawAffects = Array.isArray(finding.affects_analyses) ? finding.affects_analyses : []
+  const affects: string[] = rawAffects.filter((a): a is string => typeof a === 'string')
+
+  const rawNotAffects = Array.isArray(finding.not_affected_analyses)
     ? finding.not_affected_analyses
     : []
+  const notAffects: string[] = rawNotAffects.filter((a): a is string => typeof a === 'string')
 
-  const findingId = typeof finding.id === 'string' ? finding.id : 'unknown'
+  const findingId = typeof finding.id === 'string' && finding.id ? finding.id : 'unknown'
 
   return (
     <article id={`finding-${findingId}`} className="finding-card">
@@ -114,8 +120,8 @@ function FindingCard({ finding }: { finding: Finding }) {
         {affects.length > 0 ? (
           <span className="impact-part">
             Affects{' '}
-            {affects.map(a => (
-              <code key={a} className="analysis-chip">
+            {affects.map((a, aIdx) => (
+              <code key={`${a}-${aIdx}`} className="analysis-chip">
                 {a}
               </code>
             ))}
@@ -126,8 +132,8 @@ function FindingCard({ finding }: { finding: Finding }) {
         {notAffects.length > 0 && (
           <span className="impact-part muted">
             Does not affect{' '}
-            {notAffects.map(a => (
-              <code key={a} className="analysis-chip">
+            {notAffects.map((a, aIdx) => (
+              <code key={`${a}-${aIdx}`} className="analysis-chip">
                 {a}
               </code>
             ))}
@@ -235,7 +241,7 @@ export function FindingsList({ findings }: { findings?: unknown }) {
       {sortedFindings.length > 0 && (
         <div className="findings-list">
           {sortedFindings.map((f, idx) => (
-            <FindingCard key={f.id || idx} finding={f} />
+            <FindingCard key={`${f.id || 'finding'}-${idx}`} finding={f} />
           ))}
         </div>
       )}

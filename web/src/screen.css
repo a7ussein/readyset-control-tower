@@ -11,7 +11,8 @@
   font-weight: 700;
 }
 
-.verdict.unknown {
+.verdict.unknown,
+.verdict.unknown .verdict-mark {
   color: var(--muted);
 }
 
@@ -587,6 +588,12 @@
   display: inline-block;
 }
 
+.finding-link:hover,
+.finding-link:focus,
+.finding-link:focus-visible {
+  text-decoration: underline;
+}
+
 .finding-link code {
   padding: 2px 6px;
   background: var(--brand-tint);
@@ -597,8 +604,11 @@
   border: 1px solid var(--line);
 }
 
-.finding-link:hover code {
+.finding-link:hover code,
+.finding-link:focus code,
+.finding-link:focus-visible code {
   border-color: var(--brand);
+  text-decoration: underline;
 }
 
 .finding-missing code {
@@ -671,4 +681,143 @@
 .targets-toggle {
   margin-top: 8px;
   font-size: 13px;
+}
+
+/* Piece 5: Result Details & Download Section */
+
+.result-details-section {
+  margin: 28px 0;
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+
+.result-details-section h2 {
+  font-size: 20px;
+  margin-bottom: 12px;
+}
+
+.result-details-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.result-scope {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  margin: 0;
+}
+
+.result-meta {
+  font-size: 13px;
+  margin: 0;
+}
+
+.result-checksums {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.checksums-summary {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  cursor: pointer;
+  margin-bottom: 8px;
+}
+
+.checksums-content {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.release-checksums-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.release-subheading {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0;
+}
+
+.checksums-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.checksum-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.checksum-file {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.checksum-sha {
+  font-size: 11px;
+  color: var(--muted);
+  word-break: break-all;
+}
+
+.checksum-hashof {
+  font-size: 12px;
+}
+
+.download-action {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.download-button {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.download-button:hover {
+  background: var(--brand-tint);
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+.download-error {
+  font-size: 13px;
+  color: var(--blocked);
+  margin: 0;
+}
+
+.validator-note {
+  font-size: 13px;
+  margin: 0;
 }

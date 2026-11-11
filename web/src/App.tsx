@@ -4,14 +4,16 @@ import { useEffect, useState } from 'react'
 import './App.css'
 import './screen.css'
 import { loadFindings, usingExample } from './api'
-import type { Findings } from './findings'
+import type { Finding, Findings } from './findings'
 import { useTheme } from './theme'
 import { Analyses } from './Analyses'
 import { FindingsList } from './FindingsList'
 import { Repairs } from './Repairs'
+import { ResultDetails } from './ResultDetails'
+import { SectionBoundary } from './SectionBoundary'
 
 function getVerdictInfo(verdict?: string) {
-  if (!verdict) return null
+  if (typeof verdict !== 'string' || !verdict) return null
   const key = verdict.toLowerCase().replace(/ /g, '-')
   if (key === 'ready') return { className: 'ready', mark: '✓', text: verdict }
   if (key === 'conditional') return { className: 'conditional', mark: '!', text: verdict }
@@ -21,13 +23,18 @@ function getVerdictInfo(verdict?: string) {
 }
 
 export function VerdictBanner({ doc }: { doc: Findings }) {
-  const verdictInfo = getVerdictInfo(doc.verdict)
-  const findingsCount = doc.findings?.length ?? 0
-  const analyses = doc.analyses ?? []
-  const rerunCount = analyses.filter(a => a.status !== 'not_rerun').length
-  const registeredCount = doc.x_readyset?.analyses_registered?.length ?? analyses.length
-  const repairsCount = doc.repairs?.length ?? 0
-  const runSeconds = doc.x_readyset?.run_seconds
+  const verdictInfo = typeof doc.verdict === 'string' ? getVerdictInfo(doc.verdict) : null
+  const findingsCount = Array.isArray(doc.findings) ? doc.findings.length : 0
+  const analyses = Array.isArray(doc.analyses) ? doc.analyses : []
+  const rerunCount = analyses.filter(a => a && typeof a === 'object' && a.status !== 'not_rerun').length
+  const registeredCount = Array.isArray(doc.x_readyset?.analyses_registered)
+    ? doc.x_readyset.analyses_registered.length
+    : analyses.length
+  const repairsCount = Array.isArray(doc.repairs) ? doc.repairs.length : 0
+  const runSeconds =
+    typeof doc.x_readyset?.run_seconds === 'number' && !isNaN(doc.x_readyset.run_seconds)
+      ? doc.x_readyset.run_seconds
+      : undefined
 
   return (
     <div className="verdict-banner">
@@ -80,19 +87,28 @@ function getFileStatusClass(status: string): string {
   }
 }
 
-export function FileStrip({ files }: { files?: { file: string; status: string; opened: boolean }[] }) {
-  if (!files || files.length === 0) {
+export function FileStrip({ files }: { files?: unknown }) {
+  if (!Array.isArray(files) || files.length === 0) {
+    return <p className="file-strip-empty muted">No per-file status in this file.</p>
+  }
+
+  const validFiles = files.filter(
+    (f): f is { file: string; status: string; opened: boolean } =>
+      Boolean(f && typeof f === 'object' && typeof (f as { file?: unknown }).file === 'string')
+  )
+
+  if (validFiles.length === 0) {
     return <p className="file-strip-empty muted">No per-file status in this file.</p>
   }
 
   return (
     <ul className="file-strip" aria-label="Per-file status">
-      {files.map(f => {
+      {validFiles.map((f, idx) => {
         const statusClass = getFileStatusClass(f.status)
         const statusWords = getFileStatusWords(f.status)
         const openedWords = f.opened ? 'opened' : 'not opened'
         return (
-          <li key={f.file} className={`file-row ${statusClass}`}>
+          <li key={`${f.file}-${idx}`} className={`file-row ${statusClass}`}>
             <span className={`file-mark ${statusClass}`} aria-hidden="true" />
             <code className="file-name">{f.file}</code>
             <span className={`file-status ${statusClass}`}>{statusWords}</span>
@@ -106,9 +122,26 @@ export function FileStrip({ files }: { files?: { file: string; status: string; o
 
 export default function App() {
   const { theme, toggle } = useTheme()
-  const [doc, setDoc] = useState<Findings>()
+  const [doc, setDoc] = useState<unknown>()
   const [error, setError] = useState('')
   useEffect(() => { loadFindings().then(setDoc).catch(e => setError(e instanceof Error ? e.message : String(e))) }, [])
+
+  const isDocValid = doc !== null && typeof doc === 'object' && !Array.isArray(doc)
+  const typedDoc = isDocValid ? (doc as Findings) : null
+
+  const releaseNames = typedDoc && Array.isArray(typedDoc.data?.releases)
+    ? typedDoc.data.releases
+        .map(r => (r && typeof r === 'object' && typeof r.name === 'string' ? r.name : ''))
+        .filter(Boolean)
+        .join(' compared with ')
+    : ''
+
+  const findingIds = typedDoc && Array.isArray(typedDoc.findings)
+    ? typedDoc.findings
+        .filter(f => f && typeof f === 'object' && !Array.isArray(f))
+        .map(f => (f as Finding).id)
+        .filter((id): id is string => typeof id === 'string')
+    : []
 
   return <>
     <header className="app-header">
@@ -123,33 +156,48 @@ export default function App() {
     <main>
       {error && <p className="error" role="alert">{error}</p>}
       {!doc && !error && <p className="muted">Loading findings…</p>}
-      {doc && <>
-        {(usingExample || doc.x_readyset?.example_notice) && <p className="demo-note">{doc.x_readyset?.example_notice ?? 'Showing the hand-written example file.'}</p>}
+      {doc && !isDocValid && (
+        <p className="error" role="alert">findings.json did not contain a result.</p>
+      )}
+      {typedDoc && <>
+        {(usingExample || typedDoc.x_readyset?.example_notice) && <p className="demo-note">{typedDoc.x_readyset?.example_notice ?? 'Showing the hand-written example file.'}</p>}
         <div className="workspace-heading">
           <div>
-            <h1>{doc.question || 'Comparison'}</h1>
-            <p>{doc.data?.releases?.map(r => r.name).filter(Boolean).join(' compared with ') || 'No release information'}</p>
+            <h1>{typedDoc.question || 'Comparison'}</h1>
+            <p>{releaseNames || 'No release information'}</p>
           </div>
         </div>
 
         {/* Piece 1: VerdictBanner and FileStrip */}
-        <VerdictBanner doc={doc} />
-        <FileStrip files={doc.x_readyset?.files} />
+        <SectionBoundary name="verdict banner">
+          <VerdictBanner doc={typedDoc} />
+        </SectionBoundary>
+        <SectionBoundary name="file strip">
+          <FileStrip files={typedDoc.x_readyset?.files} />
+        </SectionBoundary>
 
         {/* Piece 2: Analyses */}
-        <Analyses analyses={doc.analyses} />
+        <SectionBoundary name="analyses">
+          <Analyses analyses={typedDoc.analyses} />
+        </SectionBoundary>
 
         {/* Piece 3: Findings */}
-        <FindingsList findings={doc.findings} />
+        <SectionBoundary name="findings">
+          <FindingsList findings={typedDoc.findings} />
+        </SectionBoundary>
 
         {/* Piece 4: Proposed repairs */}
-        <Repairs
-          repairs={doc.repairs}
-          findingIds={(doc.findings ?? []).map(f => f.id).filter((id): id is string => typeof id === 'string')}
-        />
+        <SectionBoundary name="repairs">
+          <Repairs repairs={typedDoc.repairs} findingIds={findingIds} />
+        </SectionBoundary>
+
+        {/* Piece 5: Result details & download */}
+        <SectionBoundary name="result details">
+          <ResultDetails doc={typedDoc} />
+        </SectionBoundary>
 
         {/* Pieces still to build:
-            1. download: export of findings.json with the validator's result
+            Only hardening and polish remain.
         */}
       </>}
     </main>

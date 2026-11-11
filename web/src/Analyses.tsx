@@ -114,8 +114,12 @@ function getStatusInfo(status: string) {
 }
 
 function AnalysisCard({ analysis }: { analysis: Analysis }) {
-  const statusInfo = getStatusInfo(analysis.status)
-  const isRerun = analysis.status === 'changed' || analysis.status === 'unchanged'
+  const statusStr = typeof analysis.status === 'string' ? analysis.status : ''
+  const statusInfo = getStatusInfo(statusStr)
+  const isRerun = statusStr === 'changed' || statusStr === 'unchanged'
+
+  const analysisId =
+    typeof analysis.id === 'string' && analysis.id ? analysis.id : 'unknown'
 
   const isBeforeObj =
     analysis.before !== null &&
@@ -138,7 +142,7 @@ function AnalysisCard({ analysis }: { analysis: Analysis }) {
     <article className="analysis-card">
       <div className="analysis-header">
         <h3>
-          Analysis <code>{analysis.id}</code>
+          Analysis <code>{analysisId}</code>
         </h3>
         <span className={`analysis-status ${statusInfo.className}`}>
           <span className="analysis-status-mark" aria-hidden="true">
@@ -162,7 +166,7 @@ function AnalysisCard({ analysis }: { analysis: Analysis }) {
         <div className="analysis-table-wrap">
           <table className="analysis-table">
             <caption className="visually-hidden">
-              Comparison of analysis {analysis.id} before and after
+              Comparison of analysis {analysisId} before and after
             </caption>
             <thead>
               <tr>
@@ -175,8 +179,8 @@ function AnalysisCard({ analysis }: { analysis: Analysis }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map(row => (
-                <tr key={row.label} className={row.changed ? 'row-changed' : undefined}>
+              {rows.map((row, rowIdx) => (
+                <tr key={`${row.label}-${rowIdx}`} className={row.changed ? 'row-changed' : undefined}>
                   <th scope="row" className="measure-name">
                     {row.label}
                   </th>
@@ -209,14 +213,38 @@ export function Analyses({ analyses }: { analyses?: unknown }) {
     )
   }
 
+  let skippedCount = 0
+  const validAnalyses: Analysis[] = []
+
+  for (const item of analyses) {
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      validAnalyses.push(item as Analysis)
+    } else {
+      skippedCount++
+    }
+  }
+
   return (
     <section className="analyses-section" aria-label="Analyses">
       <h2>Analyses</h2>
-      <div className="analyses-list">
-        {analyses.map((a: Analysis, idx) => (
-          <AnalysisCard key={a.id || idx} analysis={a} />
-        ))}
-      </div>
+
+      {skippedCount > 0 && (
+        <p className="muted" style={{ margin: '8px 0 16px' }}>
+          {skippedCount} {skippedCount === 1 ? 'entry' : 'entries'} could not be displayed.
+        </p>
+      )}
+
+      {validAnalyses.length === 0 && (
+        <p className="analyses-empty muted">No analyses in this file.</p>
+      )}
+
+      {validAnalyses.length > 0 && (
+        <div className="analyses-list">
+          {validAnalyses.map((a, idx) => (
+            <AnalysisCard key={`${a.id || 'analysis'}-${idx}`} analysis={a} />
+          ))}
+        </div>
+      )}
     </section>
   )
 }

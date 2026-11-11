@@ -205,7 +205,7 @@ export function Repairs({ repairs, findingIds }: RepairsProps) {
       {validRepairs.length > 0 && (
         <div className="repairs-list">
           {validRepairs.map((r, idx) => (
-            <RepairCard key={r.id || idx} repair={r} findingIdSet={findingIdSet} />
+            <RepairCard key={`${r.id || 'repair'}-${idx}`} repair={r} findingIdSet={findingIdSet} />
           ))}
         </div>
       )}
