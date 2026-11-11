@@ -2,11 +2,104 @@
 // Everything it shows comes from findings.json (docs/OUTPUT-CONTRACT.md). It computes no numbers.
 import { useEffect, useState } from 'react'
 import './App.css'
+import './screen.css'
 import { loadFindings, usingExample } from './api'
 import type { Findings } from './findings'
 import { useTheme } from './theme'
 
-const verdictClass = (verdict: string) => verdict.toLowerCase().replace(/ /g, '-')
+function getVerdictInfo(verdict?: string) {
+  if (!verdict) return null
+  const key = verdict.toLowerCase().replace(/ /g, '-')
+  if (key === 'ready') return { className: 'ready', mark: '✓', text: verdict }
+  if (key === 'conditional') return { className: 'conditional', mark: '!', text: verdict }
+  if (key === 'blocked') return { className: 'blocked', mark: '×', text: verdict }
+  if (key === 'insufficient-evidence') return { className: 'insufficient-evidence', mark: '?', text: verdict }
+  return { className: 'unknown', mark: '?', text: verdict }
+}
+
+export function VerdictBanner({ doc }: { doc: Findings }) {
+  const verdictInfo = getVerdictInfo(doc.verdict)
+  const findingsCount = doc.findings?.length ?? 0
+  const analyses = doc.analyses ?? []
+  const rerunCount = analyses.filter(a => a.status !== 'not_rerun').length
+  const registeredCount = doc.x_readyset?.analyses_registered?.length ?? analyses.length
+  const repairsCount = doc.repairs?.length ?? 0
+  const runSeconds = doc.x_readyset?.run_seconds
+
+  return (
+    <div className="verdict-banner">
+      {verdictInfo ? (
+        <p className={`verdict ${verdictInfo.className}`} role="status">
+          <span className="verdict-mark" aria-hidden="true">{verdictInfo.mark}</span>
+          {verdictInfo.text}
+        </p>
+      ) : (
+        <p className="verdict-missing muted" role="status">This file has no verdict.</p>
+      )}
+      <p className="verdict-summary">
+        {findingsCount} {findingsCount === 1 ? 'finding' : 'findings'},{' '}
+        {rerunCount} of {registeredCount} analyses rerun,{' '}
+        {repairsCount} proposed {repairsCount === 1 ? 'repair' : 'repairs'}
+        {typeof runSeconds === 'number' && ` · compared in ${runSeconds} s`}
+      </p>
+    </div>
+  )
+}
+
+function getFileStatusWords(status: string): string {
+  switch (status) {
+    case 'changed':
+      return 'changed'
+    case 'unchanged':
+      return 'unchanged'
+    case 'absent':
+      return 'in neither release'
+    case 'missing_in_one':
+      return 'missing in one release'
+    case 'unreadable':
+      return 'unreadable'
+    default:
+      return status || 'unknown'
+  }
+}
+
+function getFileStatusClass(status: string): string {
+  switch (status) {
+    case 'changed':
+      return 'status-conditional'
+    case 'unchanged':
+      return 'status-ready'
+    case 'missing_in_one':
+    case 'unreadable':
+      return 'status-blocked'
+    default:
+      return 'status-neutral'
+  }
+}
+
+export function FileStrip({ files }: { files?: { file: string; status: string; opened: boolean }[] }) {
+  if (!files || files.length === 0) {
+    return <p className="file-strip-empty muted">No per-file status in this file.</p>
+  }
+
+  return (
+    <ul className="file-strip" aria-label="Per-file status">
+      {files.map(f => {
+        const statusClass = getFileStatusClass(f.status)
+        const statusWords = getFileStatusWords(f.status)
+        const openedWords = f.opened ? 'opened' : 'not opened'
+        return (
+          <li key={f.file} className={`file-row ${statusClass}`}>
+            <span className={`file-mark ${statusClass}`} aria-hidden="true" />
+            <code className="file-name">{f.file}</code>
+            <span className={`file-status ${statusClass}`}>{statusWords}</span>
+            <span className="file-opened muted">{openedWords}</span>
+          </li>
+        )
+      })}
+    </ul>
+  )
+}
 
 export default function App() {
   const { theme, toggle } = useTheme()
@@ -29,25 +122,24 @@ export default function App() {
       {!doc && !error && <p className="muted">Loading findings…</p>}
       {doc && <>
         {(usingExample || doc.x_readyset?.example_notice) && <p className="demo-note">{doc.x_readyset?.example_notice ?? 'Showing the hand-written example file.'}</p>}
-        <div className="workspace-heading"><div><h1>{doc.question}</h1><p>{doc.data.releases.map(r => r.name).join(' compared with ')}</p></div></div>
+        <div className="workspace-heading">
+          <div>
+            <h1>{doc.question || 'Comparison'}</h1>
+            <p>{doc.data?.releases?.map(r => r.name).filter(Boolean).join(' compared with ') || 'No release information'}</p>
+          </div>
+        </div>
 
-        {/* ------------------------------------------------------------------------------------------
-            THE SCREEN GOES HERE. What a judge needs on one screen, all of it already in `doc`:
-              1. the verdict banner, with doc.x_readyset.run_seconds and one line per file (x_readyset.files)
-              2. the findings: severity, confidence, sample ids, affects / does not affect, limitation, review flag
-              3. the analyses: before and after, or "not rerun" with its note
-              4. the proposed repairs, each tied to the findings it addresses
-              5. a download of findings.json with the validator's result
-            Reusable pieces from ReadySet are in web/parts-from-readyset/ (see web/README.md).
-            What is below is a placeholder that proves the data arrives.
-        ------------------------------------------------------------------------------------------- */}
-        {doc.verdict && <p className={`verdict ${verdictClass(doc.verdict)}`} role="status">{doc.verdict}</p>}
-        <p className="verdict-summary">
-          {doc.findings.length} {doc.findings.length === 1 ? 'finding' : 'findings'}, {' '}
-          {(doc.analyses ?? []).filter(a => a.status !== 'not_rerun').length} of {(doc.analyses ?? []).length} analyses rerun, {' '}
-          {(doc.repairs ?? []).length} proposed {(doc.repairs ?? []).length === 1 ? 'repair' : 'repairs'}
-        </p>
-        <ul>{doc.findings.map(f => <li key={f.id}><code>{f.id}</code> {f.summary}</li>)}</ul>
+        {/* Piece 1: VerdictBanner and FileStrip */}
+        <VerdictBanner doc={doc} />
+        <FileStrip files={doc.x_readyset?.files} />
+
+        {/* Pieces still to build:
+            1. analyses: before and after, or "not rerun" with its note
+            2. findings: severity, confidence, sample ids, affects / does not affect, limitation, review flag
+            3. repairs: proposed repairs, each tied to the findings it addresses
+            4. download: export of findings.json with the validator's result
+        */}
+        <ul>{(doc.findings ?? []).map(f => <li key={f.id}><code>{f.id}</code> {f.summary}</li>)}</ul>
       </>}
     </main>
     <footer>Built by team Automyte. De-identified TCGA research data. Research use only, not a clinical tool.</footer>

@@ -1,0 +1,122 @@
+/* Screen Piece 1: Verdict Banner and File Strip */
+
+.verdict-banner {
+  margin: 18px 0 24px;
+}
+
+.verdict-mark {
+  display: inline-block;
+  margin-right: 8px;
+  font-size: 0.85em;
+  font-weight: 700;
+}
+
+.verdict.unknown {
+  color: var(--muted);
+}
+
+.verdict-missing {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 18px 0 10px;
+}
+
+/* File Strip */
+
+.file-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 20px 0 24px;
+  padding: 0;
+  list-style: none;
+}
+
+.file-strip-empty {
+  font-size: 14px;
+  margin: 20px 0 24px;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.file-row.status-ready {
+  border-color: var(--line);
+}
+
+.file-row.status-conditional {
+  border-color: var(--conditional);
+  background: var(--conditional-tint);
+}
+
+.file-row.status-blocked {
+  border-color: var(--blocked);
+  background: var(--blocked-tint);
+}
+
+.file-row.status-neutral {
+  border-color: var(--line);
+}
+
+.file-mark {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.file-mark.status-ready {
+  background: var(--ready);
+}
+
+.file-mark.status-conditional {
+  background: var(--conditional);
+}
+
+.file-mark.status-blocked {
+  background: var(--blocked);
+}
+
+.file-mark.status-neutral {
+  background: var(--muted);
+}
+
+.file-name {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.file-status {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.file-status.status-ready {
+  color: var(--ready);
+}
+
+.file-status.status-conditional {
+  color: var(--conditional);
+}
+
+.file-status.status-blocked {
+  color: var(--blocked);
+}
+
+.file-status.status-neutral {
+  color: var(--muted);
+}
+
+.file-opened {
+  font-size: 12px;
+  margin-left: auto;
+}
+
