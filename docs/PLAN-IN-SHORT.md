@@ -50,8 +50,11 @@ need nothing that isn't in that file. If it does, tell Ahmed and the file gets a
 1. What does the checker compare: just the kind of change and the sample ids, or also severity, verdict and repairs?
 2. One finding per change, or one per sample?
 3. How do we receive the hidden release, and which files can it change?
-4. Is building on our October work allowed, and how should the README say so?
-5. The seven-criterion rubric, which isn't in the repo.
+4. The seven-criterion rubric, which isn't in the repo.
+
+Already answered (relayed by Ahmed, 10 Nov):
+- Building on our October ReadySet work is allowed. The README states it and will list every carried-over file.
+- Ordi's OncoSys internship does not affect eligibility.
 
 ## Who does what
 - **Ahmed:** the engine. Makes the 24 tests pass, in the build order in the engine plan.

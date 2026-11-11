@@ -32,8 +32,12 @@ Ordi (@ordibimvy) · James (@Bjay4910) · Ahmed Hussein (@a7ussein)
 
 ## Earlier work
 
-Some of us built an earlier tool, ReadySet, in October 2026 for the first version of this challenge. This repository
-starts empty. Anything carried over from ReadySet will be listed here, file by file, when it is added.
+This project builds on ReadySet, a tool Ahmed built in October 2026 for the first version of this challenge. The
+team was told that building on that earlier work is allowed. This repository started empty on 10 November 2026;
+everything carried over from ReadySet is listed here, file by file, as it is added.
+
+Carried over so far: nothing. The approach is the same (every finding cites the samples behind it, "could not look" is
+kept apart from "failed", and the tool never guesses).
 
 ## Licence
 
