@@ -1,0 +1,500 @@
+{
+  "format_version": "0.2",
+  "producer": {
+    "team": "Automyte",
+    "product": "Cohort Control Tower",
+    "track": "cohort-firewall"
+  },
+  "data": {
+    "dataset": "TCGA-BRCA (event frozen release)",
+    "releases": [
+      {
+        "name": "A",
+        "files": [
+          {
+            "file": "clinical.tsv",
+            "sha256": "27cd7da6f6bcc39499d39ac72ce3a5f315e7236807712c8684178a738078aef0",
+            "hash_of": "content"
+          },
+          {
+            "file": "survival.tsv",
+            "sha256": "318e608254ca46e55ace00dce8a737b2f941e3d89b7aa7cfec801e3c2ee30cae",
+            "hash_of": "content"
+          },
+          {
+            "file": "mutation_gene_level.tsv.gz",
+            "sha256": "87b0f83294d2f08c5070a04ca4aa6d074a86c53af134e7afebe447ab1ce9b467",
+            "hash_of": "content"
+          },
+          {
+            "file": "protein_rppa.tsv.gz",
+            "sha256": "7413a101453470f15b1322346d9082fc82cc0e0b4225691299fe976c06087ca2",
+            "hash_of": "content"
+          },
+          {
+            "file": "copy_number_gistic.tsv.gz",
+            "sha256": "180fc2e76f8844058e9e2ebb9730332ae242da6ed1ad45e0dee688a641384dea",
+            "hash_of": "content"
+          },
+          {
+            "file": "rna_hiseq.tsv.gz",
+            "sha256": "1c125468fd17a6ea0c6fcc4543ec99b5ebde928efed5cabed5e0793195818b5b",
+            "hash_of": "content"
+          }
+        ]
+      },
+      {
+        "name": "example-B",
+        "files": [
+          {
+            "file": "clinical.tsv",
+            "sha256": "449ed6eb64b1aeccc907ab72eeee600acf5c59a0b6cf38ebe9d985084a8a8602",
+            "hash_of": "content"
+          },
+          {
+            "file": "survival.tsv",
+            "sha256": "318e608254ca46e55ace00dce8a737b2f941e3d89b7aa7cfec801e3c2ee30cae",
+            "hash_of": "content"
+          },
+          {
+            "file": "mutation_gene_level.tsv.gz",
+            "sha256": "971202c7df370759c7332ab3df643bb4051b2cf385d04ae19e2f8002862934a6",
+            "hash_of": "content"
+          },
+          {
+            "file": "protein_rppa.tsv.gz",
+            "sha256": "9c5c8fd60b941d82c7dcc97f429d64eb42ec6dedf2a002385276939145a873d5",
+            "hash_of": "content"
+          },
+          {
+            "file": "copy_number_gistic.tsv.gz",
+            "sha256": "180fc2e76f8844058e9e2ebb9730332ae242da6ed1ad45e0dee688a641384dea",
+            "hash_of": "content"
+          },
+          {
+            "file": "rna_hiseq.tsv.gz",
+            "sha256": "1c125468fd17a6ea0c6fcc4543ec99b5ebde928efed5cabed5e0793195818b5b",
+            "hash_of": "content"
+          }
+        ]
+      }
+    ]
+  },
+  "question": "Did anything change between release A and release example-B that affects analysis A1 or A2?",
+  "verdict": "Conditional",
+  "findings": [
+    {
+      "id": "F1",
+      "kind": "sample_swap",
+      "summary": "Two samples traded their protein measurements: in example-B each one carries the other's release-A profile.",
+      "severity": "high",
+      "confidence": "high",
+      "evidence": [
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A001-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz",
+          "note": "its protein profile in example-B equals TCGA-ZZ-A002-01's profile in release A"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A002-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz",
+          "note": "its protein profile in example-B equals TCGA-ZZ-A001-01's profile in release A"
+        },
+        {
+          "kind": "file",
+          "id": "protein_rppa.tsv.gz",
+          "release": "example-B",
+          "note": "content hash differs from release A"
+        }
+      ],
+      "affects_analyses": [
+        "A1"
+      ],
+      "not_affected_analyses": [
+        "A2"
+      ],
+      "limitation": "A swap is inferred from matching profiles. It shows the labels were exchanged, not which release is correct.",
+      "needs_human_review": true
+    },
+    {
+      "id": "F2",
+      "kind": "duplicate",
+      "summary": "Two sample ids in example-B carry protein profiles identical to two other samples in the same file.",
+      "severity": "high",
+      "confidence": "high",
+      "evidence": [
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A101-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz",
+          "note": "identical to TCGA-ZZ-A003-01 in example-B; this id is not in release A"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A102-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz",
+          "note": "identical to TCGA-ZZ-A004-01 in example-B; this id is not in release A"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A003-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz",
+          "note": "the profile that was copied"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A004-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz",
+          "note": "the profile that was copied"
+        }
+      ],
+      "affects_analyses": [
+        "A1"
+      ],
+      "not_affected_analyses": [
+        "A2"
+      ],
+      "limitation": "Identical profiles across different ids are treated as copies. Two real samples with identical measurements would look the same.",
+      "needs_human_review": true
+    },
+    {
+      "id": "F3",
+      "kind": "membership_change",
+      "summary": "The protein file has the same number of samples in both releases, but two samples from release A are gone and two new ids appeared.",
+      "severity": "high",
+      "confidence": "high",
+      "evidence": [
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A005-01",
+          "release": "A",
+          "file": "protein_rppa.tsv.gz",
+          "note": "in release A, absent from example-B"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A006-01",
+          "release": "A",
+          "file": "protein_rppa.tsv.gz",
+          "note": "in release A, absent from example-B"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A101-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz",
+          "note": "in example-B, absent from release A"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A102-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz",
+          "note": "in example-B, absent from release A"
+        }
+      ],
+      "affects_analyses": [
+        "A1"
+      ],
+      "not_affected_analyses": [
+        "A2"
+      ],
+      "limitation": "Reports which ids entered and left. It does not say why.",
+      "needs_human_review": true
+    },
+    {
+      "id": "F4",
+      "kind": "label_conflict",
+      "summary": "The clinical column histological_type changed value for three samples between releases.",
+      "severity": "low",
+      "confidence": "high",
+      "evidence": [
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A007-01",
+          "release": "example-B",
+          "file": "clinical.tsv",
+          "note": "histological_type: 'Infiltrating Ductal Carcinoma' in A, 'Infiltrating Lobular Carcinoma' in example-B"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A008-01",
+          "release": "example-B",
+          "file": "clinical.tsv",
+          "note": "histological_type: 'Infiltrating Ductal Carcinoma' in A, 'Infiltrating Lobular Carcinoma' in example-B"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A009-01",
+          "release": "example-B",
+          "file": "clinical.tsv",
+          "note": "histological_type: 'Infiltrating Ductal Carcinoma' in A, 'Infiltrating Lobular Carcinoma' in example-B"
+        }
+      ],
+      "affects_analyses": [],
+      "not_affected_analyses": [
+        "A1",
+        "A2"
+      ],
+      "limitation": "Neither registered analysis reads this column, so the effect on any other analysis is unknown.",
+      "needs_human_review": true
+    },
+    {
+      "id": "F5",
+      "kind": "missing_data",
+      "summary": "One sample's ER-alpha protein value is present in release A and blank in example-B.",
+      "severity": "high",
+      "confidence": "high",
+      "evidence": [
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A010-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz",
+          "note": "row ERALPHA: a value in A, blank in example-B"
+        },
+        {
+          "kind": "protein",
+          "id": "ERALPHA",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz"
+        }
+      ],
+      "affects_analyses": [
+        "A1"
+      ],
+      "not_affected_analyses": [
+        "A2"
+      ],
+      "limitation": "Only cells that differ between the two releases are compared. Values missing in both are not reported.",
+      "needs_human_review": true
+    },
+    {
+      "id": "F6",
+      "kind": "other",
+      "summary": "Four cells in the mutation file differ between releases and match no known pattern (not a swap, a copy, a relabel or a blank).",
+      "severity": "low",
+      "confidence": "low",
+      "evidence": [
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A011-01",
+          "release": "example-B",
+          "file": "mutation_gene_level.tsv.gz",
+          "note": "2 cells differ"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A012-01",
+          "release": "example-B",
+          "file": "mutation_gene_level.tsv.gz",
+          "note": "2 cells differ"
+        },
+        {
+          "kind": "file",
+          "id": "mutation_gene_level.tsv.gz",
+          "release": "example-B",
+          "note": "content hash differs from release A"
+        }
+      ],
+      "affects_analyses": [],
+      "not_affected_analyses": [
+        "A1",
+        "A2"
+      ],
+      "limitation": "The tool can show that these values changed. It cannot classify the change or say whether it is an error.",
+      "needs_human_review": true
+    }
+  ],
+  "analyses": [
+    {
+      "id": "A1",
+      "status": "changed",
+      "before": {
+        "analysis": "A1",
+        "inputs": [
+          "clinical.tsv",
+          "protein_rppa.tsv.gz"
+        ],
+        "n_samples": 700,
+        "n_positive": 530,
+        "n_negative": 170,
+        "mean_positive": 2.1,
+        "mean_negative": -0.9,
+        "difference": 3.0,
+        "n_ids_listed": 700
+      },
+      "after": {
+        "analysis": "A1",
+        "inputs": [
+          "clinical.tsv",
+          "protein_rppa.tsv.gz"
+        ],
+        "n_samples": 699,
+        "n_positive": 529,
+        "n_negative": 170,
+        "mean_positive": 2.05,
+        "mean_negative": -0.82,
+        "difference": 2.87,
+        "n_ids_listed": 699
+      },
+      "note": "Rerun because F1, F2, F3 and F5 touch protein_rppa.tsv.gz samples that A1 reads."
+    },
+    {
+      "id": "A2",
+      "status": "not_rerun",
+      "note": "Not rerun: A2 reads clinical.tsv columns sampleID and PAM50Call_RNAseq only. clinical.tsv changed (F4), but in a column A2 does not read, and no finding touches a sample's PAM50Call_RNAseq value."
+    }
+  ],
+  "repairs": [
+    {
+      "id": "R1",
+      "action": "restore_from_previous_release",
+      "targets": [
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A001-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A002-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz"
+        }
+      ],
+      "justification": "Each sample's example-B protein profile is the other's release-A profile. Restoring both from release A undoes the exchange.",
+      "addresses": [
+        "F1"
+      ]
+    },
+    {
+      "id": "R2",
+      "action": "exclude",
+      "targets": [
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A101-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A102-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz"
+        }
+      ],
+      "justification": "These ids are not in release A and their profiles are exact copies of two other samples. Excluding them removes the double-counted measurements.",
+      "addresses": [
+        "F2",
+        "F3"
+      ]
+    },
+    {
+      "id": "R3",
+      "action": "restore_from_previous_release",
+      "targets": [
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A005-01",
+          "release": "A",
+          "file": "protein_rppa.tsv.gz"
+        },
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A006-01",
+          "release": "A",
+          "file": "protein_rppa.tsv.gz"
+        }
+      ],
+      "justification": "These two samples were in release A and are missing from example-B with no replacement of their own.",
+      "addresses": [
+        "F3"
+      ]
+    },
+    {
+      "id": "R4",
+      "action": "restore_from_previous_release",
+      "targets": [
+        {
+          "kind": "sample",
+          "id": "TCGA-ZZ-A010-01",
+          "release": "example-B",
+          "file": "protein_rppa.tsv.gz"
+        }
+      ],
+      "justification": "The ER-alpha value exists in release A and is blank in example-B.",
+      "addresses": [
+        "F5"
+      ]
+    },
+    {
+      "id": "R5",
+      "action": "flag_for_review",
+      "targets": [
+        {
+          "kind": "file",
+          "id": "mutation_gene_level.tsv.gz",
+          "release": "example-B"
+        }
+      ],
+      "justification": "Four cells changed in a way the tool cannot classify. A person should decide whether the new values are corrections or errors.",
+      "addresses": [
+        "F6"
+      ]
+    }
+  ],
+  "x_readyset": {
+    "example_notice": "HAND-WRITTEN EXAMPLE of the output shape. Every sample id, checksum and number in this file is invented. It describes no real release.",
+    "engine_version": "0.0.0-contract",
+    "generated_at": "2026-11-11T00:00:00+00:00",
+    "run_seconds": 4.2,
+    "analyses_registered": [
+      "A1",
+      "A2"
+    ],
+    "files": [
+      {
+        "file": "clinical.tsv",
+        "status": "changed",
+        "opened": true
+      },
+      {
+        "file": "survival.tsv",
+        "status": "unchanged",
+        "opened": false
+      },
+      {
+        "file": "mutation_gene_level.tsv.gz",
+        "status": "changed",
+        "opened": true
+      },
+      {
+        "file": "protein_rppa.tsv.gz",
+        "status": "changed",
+        "opened": true
+      },
+      {
+        "file": "copy_number_gistic.tsv.gz",
+        "status": "unchanged",
+        "opened": false
+      },
+      {
+        "file": "rna_hiseq.tsv.gz",
+        "status": "unchanged",
+        "opened": false
+      }
+    ],
+    "scope": "Protects only the analyses registered in the tool (A1, A2). Reports what changed between two releases, not why. Research use only; no clinical claims."
+  }
+}

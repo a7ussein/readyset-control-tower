@@ -1,0 +1,14 @@
+# the event data is fetched, never committed
+data/
+releases/
+raw/
+*.tsv
+*.tsv.gz
+findings.json
+__pycache__/
+*.pyc
+.venv*/
+.DS_Store
+.env
+*.env
+node_modules/
