@@ -8,6 +8,7 @@ import type { Findings } from './findings'
 import { useTheme } from './theme'
 import { Analyses } from './Analyses'
 import { FindingsList } from './FindingsList'
+import { Repairs } from './Repairs'
 
 function getVerdictInfo(verdict?: string) {
   if (!verdict) return null
@@ -141,9 +142,14 @@ export default function App() {
         {/* Piece 3: Findings */}
         <FindingsList findings={doc.findings} />
 
+        {/* Piece 4: Proposed repairs */}
+        <Repairs
+          repairs={doc.repairs}
+          findingIds={(doc.findings ?? []).map(f => f.id).filter((id): id is string => typeof id === 'string')}
+        />
+
         {/* Pieces still to build:
-            1. repairs: proposed repairs, each tied to the findings it addresses
-            2. download: export of findings.json with the validator's result
+            1. download: export of findings.json with the validator's result
         */}
       </>}
     </main>

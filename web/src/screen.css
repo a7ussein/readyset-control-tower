@@ -499,7 +499,7 @@
   margin-bottom: 4px;
 }
 
-.repairs-count-line {
+.repairs-subtitle {
   font-size: 14px;
   margin-bottom: 16px;
 }
@@ -572,6 +572,13 @@
   font-size: 13px;
   display: inline-flex;
   align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.repair-address-item {
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
 }
 
@@ -592,6 +599,15 @@
 
 .finding-link:hover code {
   border-color: var(--brand);
+}
+
+.finding-missing code {
+  padding: 2px 6px;
+  background: var(--surface);
+  color: var(--muted);
+  border-radius: 3px;
+  font-size: 12px;
+  border: 1px solid var(--line);
 }
 
 .repair-justification {
@@ -645,6 +661,10 @@
 }
 
 .target-loc {
+  color: var(--muted);
+}
+
+.target-note {
   color: var(--muted);
 }
 
