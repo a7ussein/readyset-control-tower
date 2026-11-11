@@ -53,7 +53,7 @@ need nothing that isn't in that file. If it does, tell Ahmed and the file gets a
 4. The seven-criterion rubric, which isn't in the repo.
 
 Already answered (relayed by Ahmed, 10 Nov):
-- Building on our October ReadySet work is allowed. The README states it and will list every carried-over file.
+- Building on our October ReadySet work is allowed. We build here or copy things over as needed.
 - Ordi's OncoSys internship does not affect eligibility.
 
 ## Who does what

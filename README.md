@@ -30,15 +30,6 @@ no clinical claims.
 
 Ordi (@ordibimvy) · James (@Bjay4910) · Ahmed Hussein (@a7ussein)
 
-## Earlier work
-
-This project builds on ReadySet, a tool Ahmed built in October 2026 for the first version of this challenge. The
-team was told that building on that earlier work is allowed. This repository started empty on 10 November 2026;
-everything carried over from ReadySet is listed here, file by file, as it is added.
-
-Carried over so far: nothing. The approach is the same (every finding cites the samples behind it, "could not look" is
-kept apart from "failed", and the tool never guesses).
-
 ## Licence
 
 Apache-2.0. Third-party code and its licences will be listed here.
