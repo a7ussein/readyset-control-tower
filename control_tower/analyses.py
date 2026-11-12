@@ -70,6 +70,24 @@ class MeanByGroup:
     def _used(self, clinical, samples):
         return [s for s in samples if is_primary(s) and clinical.get(s, {}).get(self.column) in self.groups]
 
+    def problem(self, folder):
+        """Why this analysis cannot be asked of this release, or None. A missing file is not the question's fault."""
+        c, p = release.path_of(folder, CLINICAL), release.path_of(folder, self.file)
+        try:
+            if c:
+                columns, clinical = release.read_rows(c)
+                if self.column not in columns:
+                    return f"{self.id}: there is no column called {self.column} in {CLINICAL}"
+                seen = {cells.get(self.column) for cells in clinical.values()}
+                missing = [g for g in self.groups if g not in seen]
+                if missing:
+                    return f"{self.id}: no sample has the value {' or '.join(missing)} in {self.column}"
+            if p and self.row not in release.row_names(p):
+                return f"{self.id}: there is no row called {self.row} in {self.file}"
+        except (release.Unreadable, OSError, EOFError, UnicodeDecodeError):
+            return None
+        return None
+
     def used(self, folder):
         """The samples this analysis reads in this release."""
         try:
@@ -158,6 +176,15 @@ class CategoryMix:
         except (CannotRun, release.Unreadable, OSError, EOFError, UnicodeDecodeError):
             return set()
         return {s for s, cells in clinical.items() if is_primary(s) and not _missing(cells.get(self.column))}
+
+    def problem(self, folder):
+        c = release.path_of(folder, CLINICAL)
+        try:
+            if c and self.column not in release.read_rows(c)[0]:
+                return f"{self.id}: there is no column called {self.column} in {CLINICAL}"
+        except (release.Unreadable, OSError, EOFError, UnicodeDecodeError):
+            return None
+        return None
 
     def file_samples(self, folder):
         return set()

@@ -74,12 +74,80 @@ class Server(unittest.TestCase):
         self.assertEqual(status, 200)
         with open(os.path.join(d, "reviews.json")) as fh:
             self.assertEqual(json.load(fh)[key]["status"], "confirmed")
+        reviewed = json.loads(self.get(base + "/api/findings")[1])
+        self.assertEqual(reviewed["findings"][0]["needs_human_review"], False)     # any tool reading the format sees it
+        repair = next(r["id"] for r in reviewed["repairs"] if "F1" in r["addresses"])
+        decision = next(d for d in reviewed["decisions"] if d["repair_id"] == repair)
+        self.assertEqual((decision["decision"], decision["reviewer_role"]), ("approve", "research engineer"))
+        self.assertIn("R. Engineer", decision["reason"])
+        self.assertEqual(reviewed["x_readyset"]["reviews"][0]["release"], "B")
+        self.assertTrue(key.startswith("B|"))                                      # a review belongs to one release
         for query in ("", "?for=A2"):                                             # same finding, different question
             r = json.loads(self.get(base + "/api/findings" + query)[1])["x_readyset"]["reviews"]
             self.assertEqual([(x["finding"], x["status"], x["reviewer"]) for x in r], [("F1", "confirmed", "R. Engineer")])
         self.post(base + "/api/reviews", {"key": key, "status": "cleared"})
         self.assertEqual(json.loads(self.get(base + "/api/findings")[1])["x_readyset"]["reviews"], [])
         self.assertEqual(self.post(base + "/api/reviews", {"key": key, "status": "approved"})[0], 400)
+
+    def waiting(self):
+        """A server that knows the trusted release and waits for a new one, plus a changed release on disk."""
+        from tests.tiny_release import N1, P1, PROTEIN, TinyRelease
+        d = tempfile.mkdtemp()
+        a = TinyRelease()
+        trusted = a.write(os.path.join(d, "trusted"))
+        new = a.copy().swap(PROTEIN, P1, N1).write(os.path.join(d, "hidden-release"))
+        base = self.start(releases=(trusted, None), reviews=os.path.join(d, "reviews.json"), settings=None)
+        return base, d, new
+
+    def test_a_new_release_can_be_given_as_a_folder_path(self):
+        base, _, new = self.waiting()
+        self.assertEqual(json.loads(self.get(base + "/api/state")[1])["new"], None)
+        self.assertIn("x_readyset", json.loads(self.get(base + "/api/findings")[1]))          # the example, until then
+        status, state = self.post(base + "/api/release", {"path": new})
+        self.assertEqual((status, state["new_name"]), (200, "hidden-release"))
+        doc = json.loads(self.get(base + "/api/findings")[1])
+        self.assertEqual((doc["verdict"], doc["findings"][0]["kind"]), ("Conditional", "sample_swap"))
+        self.assertEqual(doc["data"]["releases"][1]["name"], "hidden-release")
+
+    def test_a_new_release_can_be_dropped_as_a_zip_or_as_loose_files(self):
+        import zipfile
+        from control_tower.release import FILES
+        base, d, new = self.waiting()
+        zip_path = os.path.join(d, "from-the-judges.zip")
+        with zipfile.ZipFile(zip_path, "w") as z:
+            for f in os.listdir(new):
+                z.write(os.path.join(new, f), os.path.join("some", "folder", f))               # nested, as zips often are
+            z.writestr("../../escape.txt", "must never be written")
+        def upload(name, path, batch):
+            with open(path, "rb") as fh:
+                req = urllib.request.Request(f"{base}/api/upload?batch={batch}&name={name}", data=fh.read(), method="POST")
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status
+        self.assertEqual(upload("from-the-judges.zip", zip_path, "batch-zip-0001"), 200)
+        status, state = self.post(base + "/api/release", {"batch": "batch-zip-0001", "name": "from-the-judges.zip"})
+        self.assertEqual((status, state["new_name"]), (200, "from-the-judges"))
+        self.assertEqual(json.loads(self.get(base + "/api/findings")[1])["verdict"], "Conditional")
+        self.assertFalse(os.path.exists(os.path.join(os.path.dirname(state["new"]), "..", "..", "escape.txt")))
+        for f in FILES:                                                                         # the same release, file by file
+            if os.path.isfile(os.path.join(new, f)):
+                upload(f, os.path.join(new, f), "batch-files-0002")
+        status, state = self.post(base + "/api/release", {"batch": "batch-files-0002", "name": "hidden-release"})
+        self.assertEqual((status, state["new_name"]), (200, "hidden-release"))
+        self.assertEqual(json.loads(self.get(base + "/api/findings")[1])["findings"][0]["kind"], "sample_swap")
+
+    def test_something_that_is_not_a_release_is_refused_in_plain_words(self):
+        base, d, _ = self.waiting()
+        empty = os.path.join(d, "empty")
+        os.makedirs(empty)
+        for bad in ({"path": empty}, {"path": os.path.join(d, "nope")}, {"batch": "../../etc"}):
+            status, body = self.post(base + "/api/release", bad)
+            self.assertEqual(status, 400, bad)
+            self.assertTrue(body["detail"])
+        req = urllib.request.Request(f"{base}/api/upload?batch=batch-bad-0003&name=passwords.txt", data=b"x", method="POST")
+        with self.assertRaises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(req, timeout=10)
+        e.exception.close()
+        self.assertEqual(e.exception.code, 400)
 
     def test_health(self):
         status, body, _ = self.get(self.start() + "/api/health")

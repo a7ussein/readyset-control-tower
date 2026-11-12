@@ -31,3 +31,36 @@ export async function saveReview(review: { key: string; status: 'confirmed' | 'd
     return response.ok
   } catch { return false }
 }
+
+export interface ReleaseState { trusted: string | null; new: string | null; trusted_name: string | null; new_name: string | null; files: string[] }
+
+async function answer(response: Response): Promise<ReleaseState> {
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : `The server answered ${response.status}.`)
+  return body as ReleaseState
+}
+
+/** Which two releases the page is comparing. Null when there is no server (the built-in example). */
+export async function releaseState(): Promise<ReleaseState | null> {
+  if (usingExample) return null
+  try { return await answer(await fetch(`${base}/api/state`)) } catch { return null }
+}
+
+/** Point the page at a release by its path on this computer: a folder or a zip. */
+export async function setRelease(change: { path?: string; trusted?: string }): Promise<ReleaseState> {
+  return answer(await fetch(`${base}/api/release`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(change) }))
+}
+
+/** Send dropped files (the release's own files, or one zip) and compare them. `progress` is told what is being sent. */
+export async function uploadRelease(files: File[], name: string, known: string[], progress: (text: string) => void): Promise<ReleaseState> {
+  const wanted = files.filter(f => known.includes(f.name) || f.name.toLowerCase().endsWith('.zip'))
+  if (wanted.length === 0) throw new Error(`None of the release's files were in what you dropped. Looking for ${known.slice(0, 2).join(', ')} and the others, or a zip of them.`)
+  const batch = (crypto.randomUUID ? crypto.randomUUID() : `drop-${Date.now()}-${Math.random().toString(16).slice(2)}`).replace(/[^A-Za-z0-9-]/g, '')
+  for (const [i, file] of wanted.entries()) {
+    progress(`Reading ${file.name} (${i + 1} of ${wanted.length})`)
+    const response = await fetch(`${base}/api/upload?batch=${batch}&name=${encodeURIComponent(file.name)}`, { method: 'POST', body: file })
+    if (!response.ok) await answer(response)
+  }
+  progress('Comparing')
+  return answer(await fetch(`${base}/api/release`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ batch, name }) }))
+}

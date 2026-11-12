@@ -1,8 +1,8 @@
 // The judge screen: one column. The answer, what you need the data for, then each change as a step you open and decide on.
 // Everything it shows comes from findings.json (docs/OUTPUT-CONTRACT.md). It counts and formats; it computes no results.
-import { useEffect, useMemo, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import './bench.css'
-import { loadFindings, saveReview, usingExample } from './api'
+import { loadFindings, releaseState, saveReview, setRelease, uploadRelease, usingExample, type ReleaseState } from './api'
 import type { Analysis, FileInfo, Finding, Findings, Pointer, Repair, Review, Witness } from './findings'
 import { useTheme } from './theme'
 import { SectionBoundary } from './SectionBoundary'
@@ -31,6 +31,7 @@ function read(doc: Findings) {
     available: list<{ id: string; title: string }>(x?.live?.available).filter(a => typeof a.id === 'string'),
     asked: (Array.isArray(x?.analyses_in_question) ? x.analyses_in_question : list<Analysis>(doc.analyses).map(a => a.id)).filter((v): v is string => typeof v === 'string'),
     reads: (x?.analysis_reads && typeof x.analysis_reads === 'object' ? x.analysis_reads : {}) as Record<string, unknown>,
+    notes: (Array.isArray(x?.notes) ? x.notes : []).filter((n): n is string => typeof n === 'string'),
   }
 }
 type Doc = ReturnType<typeof read>
@@ -65,7 +66,13 @@ function titleOf(f: Finding): string {
     case 'membership_change': return `${plural(n, 'sample')} left or joined the file`
     case 'label_conflict': return `Labels changed for ${plural(n, 'sample')}`
     case 'missing_data': return `Values went missing for ${plural(n, 'sample')}`
-    default: return fileOf(f) ? `Something else changed in ${fileOf(f)}` : 'Something else changed'
+    default: {
+      const said = text(f.summary), file = fileOf(f)
+      if (/ but not in /.test(said)) return `${file || 'A file'} is missing from one release`
+      if (/could not be read/.test(said)) return `${file || 'A file'} could not be read`
+      if (/^The shape of /.test(said)) return `Rows or columns appeared or disappeared in ${file || 'a file'}`
+      return file ? `Values were edited in ${file}` : 'Something else changed'
+    }
   }
 }
 
@@ -241,9 +248,10 @@ function TargetList({ items, limit = 8 }: { items: Pointer[]; limit?: number }) 
 type ReviewInput = { status: 'confirmed' | 'dismissed' | 'cleared'; reviewer: string; role: string; note: string }
 const remembered = (k: string) => { try { return localStorage.getItem(k) ?? '' } catch { return '' } }
 
-const HEADLINE: Record<string, (n: number) => string> = {
-  Ready: () => 'Yes, you can use it',
-  Conditional: n => `Not yet. ${n === 1 ? 'One change needs' : `${n} changes need`} your review`,
+const HEADLINE: Record<string, (reaching: number, total: number) => string> = {
+  Ready: (_r, total) => total === 0 ? 'Yes, you can use it' : 'Yes, for the analyses you chose',
+  Conditional: (n, total) => n === total ? `Not yet. ${n === 1 ? 'One change needs' : `${n} changes need`} your review`
+    : `Not yet. ${n} of ${total} changes reach your analyses`,
   Blocked: () => 'No. An analysis can no longer run',
   'Insufficient Evidence': () => 'Cannot tell. A file is missing or unreadable',
 }
@@ -265,7 +273,7 @@ function Decision({ review, onReview }: { review?: Review; onReview: (r: ReviewI
         ? <p className="decided"><span className="decided-mark" aria-hidden="true">{review.status === 'confirmed' ? '✓' : '–'}</span>
             <span><strong>{review.status === 'confirmed' ? 'Confirmed as a real problem' : 'Dismissed as an expected change'}</strong><br />
               by {review.reviewer || 'someone who gave no name'}{review.role ? `, ${review.role}` : ''}{review.note ? `. "${review.note}"` : ''}</span></p>
-        : <p className="quiet">The tool found this. It decides nothing. Check the proof, then say what it is.</p>}
+        : <p className="quiet">The tool found this. It decides nothing. Check the proof, then say what it is. Your decision is written into the report.</p>}
       <div className="who">
         <label>Your name<input id="review-name" value={reviewer} onChange={e => setReviewer(e.target.value)} placeholder="Name" autoComplete="name" /></label>
         <label>Your role<input id="review-role" value={role} onChange={e => setRole(e.target.value)} placeholder="Research engineer" /></label>
@@ -293,10 +301,11 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step }: {
   const repairs = doc.repairs.filter(r => Array.isArray(r.addresses) && r.addresses.includes(finding.id))
   const evidence = list<Pointer>(finding.evidence)
   const rule = doc.rules[finding.id]
+  const together = (id: string) => doc.findings.filter(f => Array.isArray(f.affects_analyses) && f.affects_analyses.includes(id)).map(f => f.id)
   return (
     <article className="panel" key={finding.id} aria-label={`Change ${index + 1} of ${total}`}>
       <header className="panel-head">
-        <p className="eyebrow">Change {index + 1} of {total}<span className="sev">{KIND[finding.kind] ?? words(finding.kind)}</span><span className={`sev sev-${text(finding.severity)}`}>{text(finding.severity, 'unrated')} severity</span></p>
+        <p className="eyebrow">Change {index + 1} of {total} <span className="ref">{finding.id}</span><span className="sev">{KIND[finding.kind] ?? words(finding.kind)}</span><span className={`sev sev-${text(finding.severity)}`}>{text(finding.severity, 'unrated')} severity</span></p>
         <h2>{titleOf(finding)}</h2>
         <p className="lede">{text(finding.summary)}</p>
       </header>
@@ -313,6 +322,7 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step }: {
               <div className="effect" key={id}>
                 <p className="effect-head"><span className="ref">{id}</span> {nameOf(doc, id)}
                   <Chip tone={`st-${text(analysis?.status)}`}>{STATUS[text(analysis?.status)] ?? 'no result'}</Chip></p>
+                {together(id).length > 1 && <p className="quiet">These numbers are the effect of all {together(id).length} changes that reach {id} together ({together(id).join(', ')}). The analysis is rerun once, with every change in.</p>}
                 {analysis && <ResultTable analysis={analysis} releases={doc.releases} />}
               </div>
             )
@@ -416,8 +426,104 @@ function headlineNumber(a: Analysis): string {
   return key ? `${words(key)} ${shown(before[key])} to ${shown(after[key])}` : ''
 }
 
+// ---- bringing in a new release ----------------------------------------------------------------------------------------
+/** Every file in what was dropped: loose files, or the files inside a dropped folder (two levels deep is plenty). */
+async function droppedFiles(data: DataTransfer): Promise<{ files: File[]; name: string }> {
+  const entries = Array.from(data.items).map(i => i.webkitGetAsEntry?.()).filter((e): e is FileSystemEntry => !!e)
+  if (entries.length === 0) return { files: Array.from(data.files), name: data.files[0]?.name ?? '' }
+  const asFile = (e: FileSystemFileEntry) => new Promise<File>((ok, no) => e.file(ok, no))
+  const children = (d: FileSystemDirectoryEntry) => new Promise<FileSystemEntry[]>((ok, no) => {
+    const reader = d.createReader(); const all: FileSystemEntry[] = []
+    const more = () => reader.readEntries(batch => { if (batch.length === 0) ok(all); else { all.push(...batch); more() } }, no)
+    more()
+  })
+  const files: File[] = []
+  const walk = async (e: FileSystemEntry, depth: number) => {
+    if (e.isFile) files.push(await asFile(e as FileSystemFileEntry))
+    else if (e.isDirectory && depth < 3) for (const child of await children(e as FileSystemDirectoryEntry)) await walk(child, depth + 1)
+  }
+  for (const e of entries) await walk(e, 0)
+  return { files, name: entries[0].name }
+}
+
+function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: ReleaseState) => void }) {
+  const [open, setOpen] = useState(!state.new)
+  const [over, setOver] = useState(false)
+  const [busy, setBusy] = useState('')
+  const [problem, setProblem] = useState('')
+  const [path, setPath] = useState('')
+  const [trusted, setTrusted] = useState('')
+  const folderInput = useRef<HTMLInputElement>(null)
+  const zipInput = useRef<HTMLInputElement>(null)
+  const run = async (work: () => Promise<ReleaseState>) => {
+    setProblem('')
+    try { const next = await work(); setBusy(''); setOpen(!next.new); setPath(''); onLoaded(next) }
+    catch (e) { setBusy(''); setProblem(e instanceof Error ? e.message : String(e)) }
+  }
+  const send = (files: File[], name: string) => { setBusy('Reading'); run(() => uploadRelease(files, name, state.files, setBusy)) }
+  const onDrop = async (e: DragEvent) => {
+    e.preventDefault(); setOver(false)
+    if (!state.trusted) { setProblem('Set the trusted release first, so there is something to compare with.'); return }
+    try { const { files, name } = await droppedFiles(e.dataTransfer); send(files, name) }
+    catch { setProblem('That could not be read. Try choosing the folder or the zip with the buttons instead.') }
+  }
+  // A drop anywhere on the page counts, so nobody has to aim.
+  useEffect(() => {
+    const enter = (e: globalThis.DragEvent) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); setOver(true); setOpen(true) } }
+    const leave = (e: globalThis.DragEvent) => { if (!e.relatedTarget) setOver(false) }
+    window.addEventListener('dragover', enter); window.addEventListener('dragleave', leave)
+    return () => { window.removeEventListener('dragover', enter); window.removeEventListener('dragleave', leave) }
+  }, [])
+
+  if (!open && state.new) {
+    return (
+      <section className="release-line" aria-label="The two releases">
+        <p>Comparing the trusted release <code>{state.trusted_name}</code> with the new release <code>{state.new_name}</code>.</p>
+        <button type="button" className="ghost small" onClick={() => setOpen(true)}>Compare a different release</button>
+      </section>
+    )
+  }
+  return (
+    <section className="release-box" aria-label="Compare a new release">
+      <div className="block-row">
+        <h2 className="block-title">Compare a new release</h2>
+        {state.new && <button type="button" className="link" onClick={() => setOpen(false)}>Close</button>}
+      </div>
+      {state.trusted
+        ? <p className="block-sub">It will be compared with the trusted release <code>{state.trusted_name}</code>.</p>
+        : (
+          <form className="path-row" onSubmit={e => { e.preventDefault(); if (trusted.trim()) run(() => setRelease({ trusted: trusted.trim() })) }}>
+            <label htmlFor="trusted-path">First, where is the trusted release? Paste its folder path.</label>
+            <input id="trusted-path" value={trusted} onChange={e => setTrusted(e.target.value)} placeholder="/path/to/oncosys-hackathon-challenge/data/tcga-brca/raw" spellCheck={false} />
+            <button type="submit" className="primary" disabled={!trusted.trim()}>Use this</button>
+          </form>
+        )}
+      <div className={`drop${over ? ' over' : ''}${busy ? ' busy' : ''}`} onDragOver={e => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
+        {busy
+          ? <p className="drop-main" role="status">{busy}…</p>
+          : <>
+              <p className="drop-main">Drop the new release here</p>
+              <p className="quiet">A folder, a zip, or its files. Anywhere on this page works.</p>
+              <p className="drop-buttons">
+                <button type="button" className="ghost" disabled={!state.trusted} onClick={() => folderInput.current?.click()}>Choose a folder</button>
+                <button type="button" className="ghost" disabled={!state.trusted} onClick={() => zipInput.current?.click()}>Choose a zip</button>
+              </p>
+            </>}
+        <input ref={folderInput} type="file" hidden multiple {...{ webkitdirectory: '' }} onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) send(f, (f[0].webkitRelativePath || '').split('/')[0] || 'new-release'); e.target.value = '' }} />
+        <input ref={zipInput} type="file" hidden accept=".zip" onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) send(f, f[0].name); e.target.value = '' }} />
+      </div>
+      <form className="path-row" onSubmit={e => { e.preventDefault(); if (path.trim()) { setBusy('Comparing'); run(() => setRelease({ path: path.trim() })) } }}>
+        <label htmlFor="new-path">Or paste the path to its folder or zip</label>
+        <input id="new-path" value={path} onChange={e => setPath(e.target.value)} placeholder="/Users/you/Desktop/hidden-release" spellCheck={false} disabled={!state.trusted} />
+        <button type="submit" className="primary" disabled={!path.trim() || !state.trusted || !!busy}>Compare</button>
+      </form>
+      {problem && <p className="error inline" role="alert">{problem}</p>}
+    </section>
+  )
+}
+
 // ---- the page ------------------------------------------------------------------------------------------------------
-function Bench({ raw, onQuestion, onChanged }: { raw: Findings; onQuestion: (ids: string[]) => void; onChanged: () => void }) {
+function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuestion: (ids: string[]) => void; onChanged: () => void; release?: ReactNode }) {
   const doc = useMemo(() => read(raw), [raw])
   const ids = doc.findings.map(f => f.id)
   const fromHash = () => { const h = decodeURIComponent(location.hash.slice(1)); return ids.includes(h) ? h : ids[0] }
@@ -457,19 +563,24 @@ function Bench({ raw, onQuestion, onChanged }: { raw: Findings; onQuestion: (ids
   const touching = doc.findings.filter(f => Array.isArray(f.affects_analyses) && f.affects_analyses.length > 0).length
   const changed = doc.files.filter(f => f.status !== 'unchanged' && f.status !== 'absent')
   const finding = doc.findings.find(f => f.id === current)
+  const reached = (id: string) => doc.findings.some(f => Array.isArray(f.affects_analyses) && f.affects_analyses.includes(id))
   const newName = doc.releases[1] ?? 'the new release'
   const choices = doc.available.length ? doc.available : doc.asked.map(id => ({ id, title: text(doc.titles[id]) }))
 
   return (
     <div className="page">
+      {release}
       <section className={`hero ${tone.tone}`} aria-label="The answer">
         <p className="ask-line">Can I use <code>{newName}</code> for my analyses?</p>
-        <h1 role="status"><span className="mark" aria-hidden="true">{tone.mark}</span>{(HEADLINE[verdict] ?? (() => verdict || 'No verdict'))(touching)}</h1>
-        <p className="means">{tone.means}</p>
+        <h1 role="status"><span className="mark" aria-hidden="true">{tone.mark}</span>{(HEADLINE[verdict] ?? (() => verdict || 'No verdict'))(touching, doc.findings.length)}</h1>
+        <p className="means">{verdict === 'Ready' && doc.findings.length > 0
+          ? `Nothing these analyses read has changed. ${plural(doc.findings.length, 'change')} elsewhere in the release ${doc.findings.length === 1 ? 'is' : 'are'} listed below for the record.`
+          : tone.means}</p>
         <p className="facts">
           <span className="verdict-chip">Verdict: {verdict || 'none'}</span>
           {doc.files.length > 0 && <span>{changed.length === 0 ? `All ${doc.files.length} files are identical` : `${changed.length} of ${doc.files.length} files changed: ${changed.map(f => f.file.replace(/\.tsv(\.gz)?$/, '')).join(', ')}`}</span>}
           {doc.findings.length > 0 && touching < doc.findings.length && <span>{doc.findings.length - touching} {doc.findings.length - touching === 1 ? 'change does' : 'changes do'} not reach your analyses</span>}
+          {doc.notes.map((n, i) => <span key={i} className="warn">{n}</span>)}
         </p>
       </section>
 
@@ -493,7 +604,10 @@ function Bench({ raw, onQuestion, onChanged }: { raw: Findings; onQuestion: (ids
                     <div className="analysis-name"><span className="ref">{a.id}</span><b>{a.title || `Analysis ${a.id}`}</b></div>
                   </div>
                   {on && analysis
-                    ? <p className={`outcome ${status}`}>{status === 'changed' ? `Result changed: ${headlineNumber(analysis)}` : status === 'unchanged' ? 'Rerun. The result is the same.' : 'Untouched. Nothing it reads has changed.'}</p>
+                    ? <p className={`outcome ${reached(a.id) && status === 'not_rerun' ? 'stuck' : status}`}>{status === 'changed' ? `Result changed: ${headlineNumber(analysis)}`
+                        : status === 'unchanged' ? 'Rerun. The result is the same.'
+                        : reached(a.id) ? `Could not be rerun ${text(analysis.note).replace(/^(Affected, but )?could not be (re)?run /i, '')}`
+                        : 'Untouched. Nothing it reads has changed.'}</p>
                     : <p className="outcome off">Left out of the question.</p>}
                   {on && analysis && (analysis.before || analysis.after) && <More title="See the numbers"><ResultTable analysis={analysis} releases={doc.releases} /></More>}
                 </li>
@@ -523,7 +637,8 @@ function Bench({ raw, onQuestion, onChanged }: { raw: Findings; onQuestion: (ids
                   <button type="button" role="tab" aria-selected={f.id === current} className={`stepper${f.id === current ? ' on' : ''}${r ? ` ${r.status}` : ''}`} onClick={() => go(f.id)}>
                     <span className="num" aria-hidden="true">{r ? (r.status === 'confirmed' ? '✓' : '–') : i + 1}</span>
                     <span className="stepper-text"><b>{titleOf(f)}</b>
-                      <small>{r ? (r.status === 'confirmed' ? 'Confirmed' : 'Dismissed') : 'Waiting for you'}{' '}
+                      <small>{r ? (r.status === 'confirmed' ? 'Confirmed' : 'Dismissed')
+                        : Array.isArray(f.affects_analyses) && f.affects_analyses.length ? 'Waiting for you' : 'Does not reach your analyses'}{' '}
                         <span className={`sev sev-${text(f.severity)}`}>{text(f.severity)}</span></small></span>
                   </button>
                 </li>
@@ -544,9 +659,16 @@ export default function App() {
   const [doc, setDoc] = useState<unknown>()
   const [error, setError] = useState('')
   const [asked, setAsked] = useState<string[] | undefined>()
-  const load = (ids?: string[]) => loadFindings(ids).then(d => { setDoc(d); setError('') }).catch(e => setError(e instanceof Error ? e.message : String(e)))
+  const [working, setWorking] = useState(false)
+  const load = (ids?: string[]) => {
+    setWorking(true)
+    return loadFindings(ids).then(d => { setDoc(d); setError('') }).catch(e => setError(e instanceof Error ? e.message : String(e))).finally(() => setWorking(false))
+  }
   useEffect(() => { load() }, [])
   const onQuestion = (ids: string[]) => { setAsked(ids); load(ids) }
+  const [state, setState] = useState<ReleaseState | null>(null)
+  useEffect(() => { releaseState().then(setState) }, [])
+  const onLoaded = (next: ReleaseState) => { setState(next); setAsked(undefined); try { history.replaceState(null, '', location.pathname) } catch { /* fine */ } load() }
   const valid = doc !== null && typeof doc === 'object' && !Array.isArray(doc)
   const raw = valid ? (doc as Findings) : null
   const releases = raw ? list<{ name?: unknown }>(raw.data?.releases).map(r => text(r.name)).filter(Boolean) : []
@@ -571,7 +693,9 @@ export default function App() {
         {raw && (usingExample || raw.x_readyset?.example_notice) && (
           <p className="demo-note">{raw.x_readyset?.example_notice ?? 'Showing the hand-written example file.'}</p>
         )}
-        {raw && <SectionBoundary name="result"><Bench raw={raw} onQuestion={onQuestion} onChanged={() => load(asked)} /></SectionBoundary>}
+        {working && raw && <p className="working" role="status">Comparing the two releases…</p>}
+        {raw && <SectionBoundary name="result"><div className={working ? 'stale' : undefined}><Bench raw={raw} onQuestion={onQuestion} onChanged={() => load(asked)}
+          release={state && <ReleaseBox key={`${state.trusted}|${state.new}`} state={state} onLoaded={onLoaded} />} /></div></SectionBoundary>}
       </main>
       <footer>Built by team Automyte. De-identified TCGA research data. Research use only, not a clinical tool.</footer>
     </>

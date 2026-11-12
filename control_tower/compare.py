@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timezone
 
 from . import __version__, release
-from .analyses import ER, PAM50, REGISTRY, CannotRun, question
+from .analyses import ER, PAM50, REGISTRY, BadQuestion, CannotRun, question
 from .detect import compare_file
 from .release import FILES, PROTEIN
 
@@ -47,7 +47,14 @@ def compare(folder_a, folder_b, analyses=None):
     """`analyses` is the question: the analyses this release is needed for, as registered ids or descriptions
     (see analyses.from_spec). None means every registered analysis."""
     chosen = question(analyses)
+    # A question about a row, column or value that is not in the trusted release would always come back Ready. Refuse it.
+    wrong = [w for w in (a.problem(folder_a) for a in chosen if a not in REGISTRY) if w]
+    if wrong:
+        raise BadQuestion("the question does not fit the trusted release. " + "; ".join(wrong))
     started = time.time()
+    notes = []
+    if os.path.realpath(folder_a) == os.path.realpath(folder_b):
+        notes.append("Both releases are the same folder, so there was nothing to compare.")
     rel_a, rel_b = _names(folder_a, folder_b)
     raw, files_info, hashes = [], [], {rel_a: [], rel_b: []}
     insufficient = False
@@ -204,6 +211,7 @@ def compare(folder_a, folder_b, analyses=None):
             "analysis_titles": {a.id: a.title for a in list(REGISTRY) + [c for c in chosen if c not in REGISTRY]},
             "analysis_reads": {a.id: a.reads() for a in chosen},
             "unrelated_findings": sum(1 for f in findings if not f["affects_analyses"]),
+            "notes": notes,
             "rules": rules,
             "files": files_info,
             "witness": witness,

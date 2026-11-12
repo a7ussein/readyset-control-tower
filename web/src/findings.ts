@@ -33,6 +33,7 @@ export interface Findings {
     witness?: Record<string, Witness>
     analysis_titles?: Record<string, string>
     analyses_in_question?: string[]; analysis_reads?: Record<string, string>; unrelated_findings?: number
+    notes?: string[]
     rules?: Record<string, { detected_by?: string; impact?: string[]; severity?: string }>
     live?: { available: { id: string; title: string }[] }
     review_keys?: Record<string, string>

@@ -10,15 +10,23 @@ Serves the built page in web/dist, the findings, and the reviews people record. 
 beside the findings file, or `control-tower.reviews.json` in the current folder in live mode.
 Meant for a laptop, not for the open internet.
 """
+import atexit
 import json
 import mimetypes
 import os
+import re
+import shutil
 import sys
+import tempfile
 import threading
+import uuid
 import webbrowser
+import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, unquote, urlsplit
+
+from .release import FILES
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIST = os.path.join(ROOT, "web", "dist")
@@ -55,7 +63,7 @@ class Handler(BaseHTTPRequestHandler):
     def _document(self, wanted):
         """(status, findings document or error). In live mode the two releases are compared for the asked question."""
         srv = self.server
-        if srv.releases:
+        if srv.releases and all(srv.releases):
             ids = [x for x in wanted.split(",") if x] if wanted else list(srv.default_ids)
             unknown = [i for i in ids if i not in srv.available]
             if unknown or not ids:
@@ -83,12 +91,14 @@ class Handler(BaseHTTPRequestHandler):
     def _findings(self, wanted):
         status, doc = self._document(wanted)
         if status == 200 and isinstance(doc, dict) and isinstance(doc.get("findings"), list):
-            keys = {f["id"]: review_key(f) for f in doc["findings"] if isinstance(f, dict) and "id" in f}
+            new_release = release_name(doc)
+            keys = {f["id"]: review_key(f, new_release) for f in doc["findings"] if isinstance(f, dict) and "id" in f}
             saved = self.server.load_reviews()
             x = doc.setdefault("x_readyset", {}) if isinstance(doc.get("x_readyset", {}), dict) else None
             if x is not None:
                 x["review_keys"] = keys
-                x["reviews"] = [dict(saved[k], finding=fid) for fid, k in keys.items() if k in saved]
+                x["reviews"] = [dict(saved[k], finding=fid, release=new_release) for fid, k in keys.items() if k in saved]
+                apply_reviews(doc, {fid: saved[k] for fid, k in keys.items() if k in saved})
         self._json(status, doc)
 
     def _review(self):
@@ -114,8 +124,90 @@ class Handler(BaseHTTPRequestHandler):
             self.server.save_reviews(saved)
         self._json(200, {"saved": status != "cleared", "kept_in": self.server.reviews_path or "memory only"})
 
+    def _local_only(self):
+        origin = self.headers.get("Origin")
+        if origin and urlsplit(origin).hostname not in ("localhost", "127.0.0.1"):
+            self._json(403, {"detail": "this can only be done from this computer"})
+            return False
+        return True
+
+    def _state(self):
+        srv = self.server
+        trusted, new = srv.releases or (None, None)
+        return {"trusted": trusted, "new": new, "files": list(FILES),
+                "trusted_name": os.path.basename(os.path.normpath(trusted)) if trusted else None,
+                "new_name": os.path.basename(os.path.normpath(new)) if new else None}
+
+    def _upload(self, query):
+        """One file of a release being dropped on the page, saved into a staging folder for that drop."""
+        name = os.path.basename(query.get("name", [""])[0])
+        batch = query.get("batch", [""])[0]
+        if not re.fullmatch(r"[A-Za-z0-9-]{8,64}", batch) or not (name in FILES or name.lower().endswith(".zip")):
+            return self._json(400, {"detail": f"{name or 'that file'} is not one of the release's files or a zip"})
+        length = int(self.headers.get("Content-Length") or 0)
+        if length > MAX_UPLOAD:
+            return self._json(413, {"detail": f"{name} is too large"})
+        folder = os.path.join(self.server.staging, batch)
+        os.makedirs(folder, exist_ok=True)
+        with open(os.path.join(folder, name if name in FILES else "upload.zip"), "wb") as out:
+            left = length
+            while left > 0:
+                chunk = self.rfile.read(min(left, 1 << 20))
+                if not chunk:
+                    break
+                out.write(chunk)
+                left -= len(chunk)
+        self._json(200, {"saved": name})
+
+    def _set_release(self):
+        """Point the page at a release: {"path": folder or zip}, {"trusted": folder}, or {"batch": id, "name": label}."""
+        srv = self.server
+        try:
+            body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 20000)) or b"{}")
+            if not isinstance(body, dict):
+                raise ValueError
+        except ValueError:
+            return self._json(400, {"detail": "expected a small JSON object"})
+        try:
+            trusted, new = srv.releases or (None, None)
+            if body.get("trusted"):
+                trusted = release_folder(str(body["trusted"]), srv.staging)
+            if body.get("path"):
+                new = release_folder(str(body["path"]), srv.staging)
+            if body.get("batch"):
+                batch = str(body["batch"])
+                if not re.fullmatch(r"[A-Za-z0-9-]{8,64}", batch):
+                    raise NotARelease("that upload is not known")
+                label = re.sub(r"[^A-Za-z0-9._-]+", "-", os.path.splitext(os.path.basename(str(body.get("name") or "")))[0]).strip("-.")
+                staged = os.path.join(srv.staging, batch)
+                target = os.path.join(staged, label or "new-release")
+                os.makedirs(target, exist_ok=True)
+                for f in FILES:
+                    if os.path.isfile(os.path.join(staged, f)):
+                        os.replace(os.path.join(staged, f), os.path.join(target, f))
+                if os.path.isfile(os.path.join(staged, "upload.zip")):
+                    unzip_release(os.path.join(staged, "upload.zip"), target)
+                new = release_folder(target, srv.staging)
+        except NotARelease as e:
+            return self._json(400, {"detail": str(e)})
+        with srv.lock:
+            srv.releases = (trusted, new)
+            srv.cache.clear()
+            if not srv.reviews_path:
+                srv.reviews_path = "control-tower.reviews.json"
+            if trusted:
+                remember_trusted(trusted, srv.settings_path)
+        self._json(200, self._state())
+
     def do_POST(self):
         try:
+            parts = urlsplit(self.path)
+            if parts.path in ("/api/upload", "/api/release") and not self._local_only():
+                return
+            if parts.path == "/api/upload":
+                return self._upload(parse_qs(parts.query))
+            if parts.path == "/api/release":
+                return self._set_release()
             if urlsplit(self.path).path == "/api/reviews":
                 return self._review()
             self._json(404, {"detail": f"no such endpoint: POST {urlsplit(self.path).path}"})
@@ -142,6 +234,8 @@ class Handler(BaseHTTPRequestHandler):
             path = urlsplit(self.path).path
             if path == "/api/health":
                 return self._json(200, {"status": "ok", "service": "readyset-control-tower"})
+            if path == "/api/state":
+                return self._json(200, self._state())
             if path == "/api/findings":
                 return self._findings(parse_qs(urlsplit(self.path).query).get("for", [""])[0])
             if path.startswith("/api/"):
@@ -153,13 +247,107 @@ class Handler(BaseHTTPRequestHandler):
     do_HEAD = do_GET
 
 
-def review_key(finding):
-    """What a review is attached to: the kind, the file and the samples, so it survives a change of question."""
+MAX_UPLOAD = 2 << 30
+SETTINGS = "control-tower.settings.json"
+
+
+class NotARelease(Exception):
+    """The folder or zip does not hold any of the release's files."""
+
+
+def unzip_release(zip_path, target):
+    """Take only the release's own files out of a zip, by name, wherever they sit inside it. Nothing else is written."""
+    try:
+        with zipfile.ZipFile(zip_path) as z:
+            for info in z.infolist():
+                name = os.path.basename(info.filename)
+                if info.is_dir() or name not in FILES or info.file_size > MAX_UPLOAD:
+                    continue
+                with z.open(info) as src, open(os.path.join(target, name), "wb") as out:
+                    shutil.copyfileobj(src, out)
+    except (zipfile.BadZipFile, OSError) as e:
+        raise NotARelease(f"that zip could not be opened: {e}")
+
+
+def release_folder(path, staging):
+    """The folder that holds a release's files, given a folder or a zip. Looks one level down for a lone subfolder."""
+    path = os.path.abspath(os.path.expanduser(path.strip().strip('"').strip("'")))
+    if os.path.isfile(path) and path.lower().endswith(".zip"):
+        target = os.path.join(staging, uuid.uuid4().hex, os.path.splitext(os.path.basename(path))[0] or "new-release")
+        os.makedirs(target, exist_ok=True)
+        unzip_release(path, target)
+        path = target
+    if not os.path.isdir(path):
+        raise NotARelease(f"{path} is not a folder or a zip")
+    has = lambda folder: any(os.path.isfile(os.path.join(folder, f)) for f in FILES)
+    if not has(path):
+        inner = [os.path.join(path, d) for d in sorted(os.listdir(path)) if os.path.isdir(os.path.join(path, d))]
+        found = [d for d in inner if has(d)]
+        if len(found) != 1:
+            raise NotARelease(f"none of the release's files are in {path} (looking for {', '.join(FILES[:2])}, ...)")
+        path = found[0]
+    return path
+
+
+def remember_trusted(path, settings=SETTINGS):
+    if not settings:
+        return
+    try:
+        with open(settings, "w", encoding="utf-8") as fh:
+            json.dump({"trusted": path}, fh)
+    except OSError:
+        pass
+
+
+def default_trusted():
+    """The trusted release used last time, or the organisers' repo cloned next to this one as the README says."""
+    try:
+        with open(SETTINGS, encoding="utf-8") as fh:
+            saved = json.load(fh).get("trusted")
+        if saved and os.path.isdir(saved):
+            return saved
+    except (OSError, ValueError, AttributeError):
+        pass
+    beside = os.path.join(os.path.dirname(ROOT), "oncosys-hackathon-challenge", "data", "tcga-brca", "raw")
+    return beside if os.path.isdir(beside) else None
+
+
+def release_name(doc):
+    try:
+        return str(doc["data"]["releases"][-1]["name"])
+    except (KeyError, IndexError, TypeError):
+        return ""
+
+
+def apply_reviews(doc, reviewed):
+    """Write each person's decision where any tool that reads the shared format will find it: the finding no longer
+    waits for review, and every repair that addresses it gets a `decisions` entry (approve, or reject)."""
+    decisions = [d for d in doc.get("decisions", []) if isinstance(d, dict)] if isinstance(doc.get("decisions"), list) else []
+    for f in doc["findings"]:
+        r = reviewed.get(f.get("id")) if isinstance(f, dict) else None
+        if not r:
+            continue
+        f["needs_human_review"] = False
+        who = r.get("reviewer") or "a reviewer who gave no name"
+        said = "Confirmed as a real problem" if r["status"] == "confirmed" else "Dismissed as an expected change"
+        reason = f"{said} by {who}" + (f": {r['note']}" if r.get("note") else ".")
+        for repair in doc.get("repairs", []) if isinstance(doc.get("repairs"), list) else []:
+            if isinstance(repair, dict) and f["id"] in (repair.get("addresses") or []) and repair.get("id"):
+                decisions = [d for d in decisions if d.get("repair_id") != repair["id"]]
+                decisions.append({"repair_id": repair["id"], "decision": "approve" if r["status"] == "confirmed" else "reject",
+                                  "reason": reason, "reviewer_role": r.get("role") or "not stated", "original_preserved": True})
+    if decisions:
+        doc["decisions"] = decisions
+
+
+def review_key(finding, new_release=""):
+    """What a review is attached to: the release, the kind, the file and the samples. It survives a change of question,
+    and it does not carry over to a different release."""
     evidence = [e for e in finding.get("evidence", []) if isinstance(e, dict)]
     file = next((e.get("file") for e in evidence if e.get("file")), "") or \
         next((e.get("id") for e in evidence if e.get("kind") == "file"), "")
     ids = sorted(str(e.get("id")) for e in evidence if e.get("kind") != "file")
-    return "|".join([str(finding.get("kind")), str(file), ",".join(ids)])
+    return "|".join([new_release, str(finding.get("kind")), str(file), ",".join(ids)])
 
 
 class Server(ThreadingHTTPServer):
@@ -184,7 +372,8 @@ class Server(ThreadingHTTPServer):
             fh.write("\n")
 
 
-def make_server(host="127.0.0.1", port=8010, findings=None, quiet=False, releases=None, question=None, reviews=None):
+def make_server(host="127.0.0.1", port=8010, findings=None, quiet=False, releases=None, question=None, reviews=None,
+                settings=SETTINGS):
     """`releases` = (trusted folder, new folder) compares them live, and `question` is an optional list of analysis
     descriptions that adds to the registered ones. Otherwise one findings file is shown."""
     from .analyses import REGISTRY, from_spec
@@ -192,6 +381,9 @@ def make_server(host="127.0.0.1", port=8010, findings=None, quiet=False, release
     httpd.quiet = quiet
     httpd.findings_path = findings or EXAMPLE
     httpd.releases, httpd.lock, httpd.cache, httpd.memory = releases, threading.Lock(), {}, {}
+    httpd.settings_path = settings
+    httpd.staging = tempfile.mkdtemp(prefix="readyset-release-")
+    atexit.register(shutil.rmtree, httpd.staging, True)
     httpd.available = {a.id: a.id for a in REGISTRY}
     httpd.titles = {a.id: a.title for a in REGISTRY}
     httpd.default_ids = list(httpd.available)
@@ -202,7 +394,7 @@ def make_server(host="127.0.0.1", port=8010, findings=None, quiet=False, release
             httpd.titles[a.id] = a.title
         httpd.default_ids = [a.id for a in asked]
     # A review is a record, so it is kept on disk beside what it reviews. The built-in example keeps none.
-    httpd.reviews_path = reviews or ("control-tower.reviews.json" if releases else
+    httpd.reviews_path = reviews or ("control-tower.reviews.json" if releases and all(releases) else
                                      (findings + ".reviews.json" if findings else None))
     return httpd
 
@@ -232,12 +424,18 @@ def main(argv):
     except (StopIteration, OSError, ValueError) as e:
         print(f"error: {e or 'an option is missing its value'}", file=sys.stderr)
         return 64
-    if folders and (len(folders) != 2 or findings):
-        print("error: give two release folders (the trusted one first), or --findings FILE, not both", file=sys.stderr)
+    if len(folders) > 2 or (folders and findings):
+        print("error: give the trusted release folder, optionally the new one after it, or --findings FILE", file=sys.stderr)
         return 64
+    releases = None
+    if folders:
+        releases = (folders[0], folders[1] if len(folders) == 2 else None)
+        remember_trusted(os.path.abspath(folders[0]))
+    elif not findings and default_trusted():
+        releases = (default_trusted(), None)             # ready for a release to be dropped on the page
     try:
         from .analyses import BadQuestion
-        httpd = make_server(host, port, findings, releases=tuple(folders) if folders else None, question=question)
+        httpd = make_server(host, port, findings, releases=releases, question=question)
     except BadQuestion as e:
         print(f"error: {e}", file=sys.stderr)
         return 64
@@ -247,8 +445,12 @@ def main(argv):
         return 1
     url = f"http://localhost:{port}"
     print(f"ReadySet Control Tower is running at {url}   (Ctrl+C to stop)", flush=True)
-    print(f"Comparing live: {folders[0]}  with  {folders[1]}" if folders
-          else f"Showing: {os.path.relpath(httpd.findings_path)}", flush=True)
+    if releases and all(releases):
+        print(f"Comparing: {releases[0]}  with  {releases[1]}", flush=True)
+    else:
+        print(f"Showing: {os.path.relpath(httpd.findings_path)}", flush=True)
+        if releases:
+            print(f"Trusted release: {releases[0]}. Drop a new release on the page to compare it.", flush=True)
     if open_browser and host in ("127.0.0.1", "localhost"):
         threading.Timer(0.4, webbrowser.open, args=(url,)).start()
     try:

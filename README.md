@@ -75,6 +75,15 @@ Or let the page compare the two folders itself, which also lets you change the q
 ./run.sh serve $D/raw $D/releases/practice-B     # http://localhost:8010  (run.bat on Windows)
 ```
 
+**A release you have not seen.** Start the page with only the trusted release, then drop the new one on it:
+
+```bash
+./run.sh serve $D/raw            # then drop a folder or a zip on the page, choose one, or paste its path
+```
+
+The page compares it straight away, and "Compare a different release" takes the next one. It remembers the trusted
+release, so after the first time plain `./run.sh` is enough.
+
 **The question.** The tool protects the analyses you say the release is needed for. On the page, switch them on and
 off in the bar under the verdict. On the command line, `--for A2` asks about A2 alone, and `--question FILE` takes
 your own analyses (see "The question" in [`docs/OUTPUT-CONTRACT.md`](docs/OUTPUT-CONTRACT.md)). For the practice

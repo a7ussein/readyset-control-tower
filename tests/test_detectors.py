@@ -66,6 +66,23 @@ class Detectors(unittest.TestCase):
             with self.assertRaises(BadQuestion, msg=str(bad)):
                 self.run_pair(lambda b: b, bad)
 
+    def test_a_question_about_something_that_is_not_in_the_data_is_refused_not_answered_ready(self):
+        from control_tower.analyses import BadQuestion
+        base = {"id": "Q1", "type": "mean_by_group", "file": PROTEIN, "row": "HER2", "column": ER, "groups": ["Positive", "Negative"]}
+        for wrong, said in ((dict(base, row="NOPE"), "no row called NOPE"), (dict(base, column="nope_col"), "no column called nope_col"),
+                            (dict(base, groups=["Positive", "Purple"]), "no sample has the value Purple"),
+                            ({"id": "Q2", "type": "category_mix", "column": "nope_col"}, "no column called nope_col")):
+            with self.assertRaises(BadQuestion) as e:
+                self.run_pair(lambda b: b.swap(PROTEIN, P1, N1), [wrong])
+            self.assertIn(said, str(e.exception))
+
+    def test_the_same_folder_twice_is_said_out_loud(self):
+        a = TinyRelease()
+        folder = a.write(os.path.join(tempfile.mkdtemp(), "A"))
+        doc = compare(folder, folder)
+        self.assertEqual(doc["verdict"], "Ready")
+        self.assertIn("same folder", doc["x_readyset"]["notes"][0])
+
     def test_every_finding_says_which_rule_found_it_and_why_it_matters(self):
         doc = self.run_pair(lambda b: b.swap(PROTEIN, P1, N1))
         rule = doc["x_readyset"]["rules"][self.only("sample_swap")["id"]]
