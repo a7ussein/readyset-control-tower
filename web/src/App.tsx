@@ -40,11 +40,13 @@ const KIND: Record<string, string> = {
   sample_swap: 'sample swap', duplicate: 'duplicate', membership_change: 'membership change',
   label_conflict: 'label conflict', missing_data: 'missing data', other: 'other change',
 }
-const VERDICT: Record<string, { tone: string; mark: string }> = {
-  Ready: { tone: 'ready', mark: '✓' }, Conditional: { tone: 'conditional', mark: '!' },
-  Blocked: { tone: 'blocked', mark: '×' }, 'Insufficient Evidence': { tone: 'insufficient', mark: '?' },
+const VERDICT: Record<string, { tone: string; mark: string; means: string }> = {
+  Ready: { tone: 'ready', mark: '✓', means: 'You can use the new release for this. Nothing your analyses read has changed.' },
+  Conditional: { tone: 'conditional', mark: '!', means: 'Something your analyses read has changed. Review each change below before you use the new release.' },
+  Blocked: { tone: 'blocked', mark: '×', means: 'Do not use the new release yet. A change broke an analysis so badly it could not be rerun.' },
+  'Insufficient Evidence': { tone: 'insufficient', mark: '?', means: 'The two releases could not be fully compared, because a file is missing or unreadable.' },
 }
-const STATUS: Record<string, string> = { changed: 'changed', unchanged: 'rerun, same result', not_rerun: 'not rerun' }
+const STATUS: Record<string, string> = { changed: 'result changed', unchanged: 'rerun, same result', not_rerun: 'untouched' }
 const FILE_STATUS: Record<string, string> = {
   changed: 'content differs', unchanged: 'identical, not opened', absent: 'in neither release',
   missing_in_one: 'missing in one release', unreadable: 'could not be read',
@@ -303,19 +305,18 @@ function FindingView({ finding, doc, go, review, onReview }: { finding: Finding;
           <Chip tone="kind">{KIND[finding.kind] ?? words(finding.kind)}</Chip>
           <Chip tone={`sev-${text(finding.severity)}`}>{text(finding.severity, 'unrated')} severity</Chip>
           <Chip>{text(finding.confidence, 'unknown')} confidence</Chip>
-          {finding.needs_human_review && <Chip tone="review">needs a person to review</Chip>}
         </p>
         <h1>{titleOf(finding)}</h1>
         <p className="lede">{text(finding.summary)}</p>
       </header>
 
+      <h2 className="step">The proof</h2>
       <SectionBoundary name="proof"><Proof finding={finding} witness={doc.witness[finding.id]} /></SectionBoundary>
 
-      <SectionBoundary name="review"><ReviewCard key={finding.id} review={review} onReview={r => onReview(finding, r)} /></SectionBoundary>
-
+      <h2 className="step">What it means for you</h2>
       <div className="detail-grid">
         <section className="card">
-          <h2>What it does to the analyses</h2>
+          <h2>Effect on your analyses</h2>
           {affected.length === 0 && <p className="quiet">No registered analysis reads what this finding touches.</p>}
           {affected.map(id => {
             const analysis = doc.analyses.find(a => a.id === id)
@@ -353,6 +354,10 @@ function FindingView({ finding, doc, go, review, onReview }: { finding: Finding;
         </div>
       </div>
 
+      <h2 className="step">Your decision</h2>
+      <SectionBoundary name="review"><ReviewCard key={finding.id} review={review} onReview={r => onReview(finding, r)} /></SectionBoundary>
+
+      <h2 className="step">The details</h2>
       <RuleCard rule={doc.rules[finding.id]} />
 
       <section className="card">
@@ -474,13 +479,14 @@ function Bench({ raw, onQuestion, onChanged }: { raw: Findings; onQuestion: (ids
   }
 
   const verdict = text(raw.verdict)
-  const tone = VERDICT[verdict] ?? { tone: 'insufficient', mark: '?' }
+  const tone = VERDICT[verdict] ?? { tone: 'insufficient', mark: '?', means: '' }
+  const [guide, setGuide] = useState(() => { try { return localStorage.getItem('readyset-guide') !== 'hidden' } catch { return true } })
+  const showGuide = (on: boolean) => { setGuide(on); try { localStorage.setItem('readyset-guide', on ? 'shown' : 'hidden') } catch { /* storage may be off */ } }
   const changedFiles = doc.files.filter(f => f.status !== 'unchanged' && f.status !== 'absent').length
   const touching = doc.findings.filter(f => Array.isArray(f.affects_analyses) && f.affects_analyses.length > 0).length
   const sentence = [
-    `${plural(doc.findings.length, 'finding')}${doc.files.length ? ` in ${changedFiles} of ${plural(doc.files.length, 'file')}` : ''}.`,
-    doc.findings.length > 0 && touching === 0 ? 'None of them touches what this question reads.' : '',
-    ...doc.analyses.map(a => `${a.id} ${STATUS[text(a.status)] ?? words(a.status)}.`),
+    doc.findings.length === 0 ? 'No changes found.' : `${plural(doc.findings.length, 'change')} found${doc.files.length ? ` in ${changedFiles} of ${plural(doc.files.length, 'file')}` : ''}.`,
+    doc.findings.length > 0 && touching === 0 ? 'None of them reaches the analyses you chose.' : '',
     doc.findings.length > 0 ? `${reviewed} of ${doc.findings.length} reviewed by a person.` : '',
   ].filter(Boolean).join(' ')
   const finding = doc.findings.find(f => f.id === selected)
@@ -490,7 +496,7 @@ function Bench({ raw, onQuestion, onChanged }: { raw: Findings; onQuestion: (ids
     <>
       <section className={`verdict-bar ${tone.tone}`} aria-label="Verdict">
         <p className="verdict" role="status"><span className="mark" aria-hidden="true">{tone.mark}</span>{verdict || 'No verdict'}</p>
-        <p className="sentence">{sentence}</p>
+        <div className="sentence"><p className="means">{tone.means}</p><p>{sentence}</p></div>
         {doc.files.length > 0 && (
           <ul className="file-chips" aria-label="The files in the release">
             {doc.files.map(f => (
@@ -504,7 +510,7 @@ function Bench({ raw, onQuestion, onChanged }: { raw: Findings; onQuestion: (ids
 
       {doc.asked.length > 0 && (
         <section className="question-bar" aria-label="The question">
-          <span className="question-label">This release is needed for</span>
+          <span className="question-label">I need this release for</span>
           <ul>
             {(doc.available.length ? doc.available : doc.asked.map(id => ({ id, title: text(doc.titles[id]) }))).map(a => {
               const on = doc.asked.includes(a.id)
@@ -519,26 +525,40 @@ function Bench({ raw, onQuestion, onChanged }: { raw: Findings; onQuestion: (ids
               )
             })}
           </ul>
-          <span className="quiet">{doc.available.length ? 'Change the question and the verdict follows.' : 'Fixed in this file. Start the page on two release folders to change it.'}</span>
+          <span className="quiet">{doc.available.length ? 'Switch one off and the answer above changes.' : 'Fixed in this file. Start the page on two release folders to change it.'}</span>
+          <button type="button" className="link help" onClick={() => showGuide(!guide)}>{guide ? 'Hide the guide' : 'How do I read this page?'}</button>
+        </section>
+      )}
+
+      {guide && (
+        <section className="guide" aria-label="How to read this page">
+          <ol>
+            <li><b>Read the answer.</b> The big word at the top says whether the new release is safe to use.</li>
+            <li><b>Say what you need it for.</b> The switches under it are your analyses. Turn one off and the answer changes.</li>
+            <li><b>Open a change.</b> Each row on the left is one thing that changed. Click it to see the proof on the right.</li>
+            <li><b>Decide.</b> Check the proof, then confirm or dismiss the change in the box marked "Review by a person".</li>
+          </ol>
+          <button type="button" className="ghost small" onClick={() => showGuide(false)}>Got it</button>
         </section>
       )}
 
       <div className="bench">
         <nav className="rail" aria-label="Findings and analyses" onKeyDown={onKeys}>
-          <h2>Findings <span className="count">{doc.findings.length}</span></h2>
+          <h2>What changed <span className="count">{doc.findings.length}</span></h2>
           {doc.findings.length === 0 && <p className="quiet">Nothing was found that differs between the two releases.</p>}
+          {doc.findings.length > 0 && <p className="rail-hint">Click a change to see its proof.</p>}
           <ul>{doc.findings.map(f => (
             <li key={f.id}>
               <button type="button" data-id={f.id} className={`item${selected === f.id ? ' on' : ''}`} aria-current={selected === f.id} onClick={() => go(f.id)}>
                 <span className="ref">{f.id}</span>
                 <span className="item-text"><b>{titleOf(f)}</b>
-                  <small>{KIND[f.kind] ?? words(f.kind)}, {Array.isArray(f.affects_analyses) && f.affects_analyses.length ? `affects ${f.affects_analyses.join(', ')}` : 'affects no analysis'}</small></span>
+                  <small>{Array.isArray(f.affects_analyses) && f.affects_analyses.length ? `reaches ${f.affects_analyses.join(', ')}` : 'reaches none of your analyses'}</small></span>
                 <Chip tone={`sev-${text(f.severity)}`}>{text(f.severity)}</Chip>
                 <span className={`tick${reviewOf(f.id) ? ' done' : ''}`} title={reviewOf(f.id) ? 'Reviewed by a person' : 'Waiting for review'} aria-label={reviewOf(f.id) ? 'reviewed' : 'not reviewed'}>{reviewOf(f.id) ? '✓' : ''}</span>
               </button>
             </li>
           ))}</ul>
-          <h2>Analyses</h2>
+          <h2>Your analyses</h2>
           <ul>{doc.analyses.map(a => (
             <li key={a.id}>
               <button type="button" data-id={a.id} className={`item slim${selected === a.id ? ' on' : ''}`} aria-current={selected === a.id} onClick={() => go(a.id)}>
@@ -548,7 +568,7 @@ function Bench({ raw, onQuestion, onChanged }: { raw: Findings; onQuestion: (ids
             </li>
           ))}</ul>
           <ul><li><button type="button" data-id="about" className={`item slim${selected === 'about' ? ' on' : ''}`} aria-current={selected === 'about'} onClick={() => go('about')}>
-            <span className="item-text"><b>About this result</b><small>files, hashes, download</small></span></button></li></ul>
+            <span className="item-text"><b>Files and download</b><small>what was compared, and the findings file</small></span></button></li></ul>
           <p className="hint">Use the up and down arrow keys to move through the list.</p>
         </nav>
 
