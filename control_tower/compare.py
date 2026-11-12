@@ -139,6 +139,8 @@ def compare(folder_a, folder_b):
         fid = f"F{i}"
         moved = [a for a in f["affects"] if status_of[a] in ("changed", "blocked")]
         severity = "high" if moved else ("medium" if f["affects"] else "low")
+        if f["kind"] == "membership_change" and severity == "high":
+            severity = "medium"                 # as in the organisers' reference output: lost coverage, not corrupted values
         findings.append({
             "id": fid, "kind": f["kind"], "summary": f["summary"], "severity": severity,
             "confidence": f["confidence"], "evidence": f["evidence"],

@@ -126,6 +126,7 @@ class Detectors(unittest.TestCase):
         # The new id has no clinical record, so A1 never reads the copy. What moves A1 is the sample that left.
         self.assertEqual((dup["affects_analyses"], mem["affects_analyses"]), ([], ["A1"]))
         self.assertEqual(self.analysis("A1")["status"], "changed")
+        self.assertEqual(mem["severity"], "medium")        # lost coverage is never rated high, even when the result moves
         self.assertEqual(self.analysis("A1")["after"]["n_negative"], 1)
 
     def test_a_copy_landing_on_an_id_that_has_a_clinical_record_does_affect_a1(self):

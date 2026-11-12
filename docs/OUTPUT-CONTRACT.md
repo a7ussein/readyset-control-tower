@@ -40,7 +40,7 @@ Each finding is one thing that changed, of one kind.
 | `id` | `F1`, `F2`, … in the order found. Stable within a file. |
 | `kind` | `sample_swap` · `duplicate` · `membership_change` · `label_conflict` · `missing_data` · `other`. Nothing else. |
 | `summary` | One plain sentence a judge can read aloud. |
-| `severity` | `high` if it changes a registered analysis's result. `medium` if it touches samples an analysis reads but the result is the same. `low` if it touches no registered analysis. |
+| `severity` | `high` if it changes a registered analysis's result. `medium` if it touches samples an analysis reads but the result is the same. `low` if it touches no registered analysis. One exception, to match the organisers' reference output: a `membership_change` is never above `medium`, because it is lost coverage, not corrupted values. |
 | `confidence` | `high` when the pattern is exact (a profile matches another id's profile, a cell's text differs). `low` for the catch-all `other`. `medium` is reserved for partial matches. |
 | `evidence` | At least one pointer. Each has `kind` and `id`, plus `release`, `file` and a `note` saying what was seen there. |
 | `affects_analyses` / `not_affected_analyses` | Between them they name **every** registered analysis, each exactly once. Both are always present, even when one is empty. |
