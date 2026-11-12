@@ -15,3 +15,4 @@ node_modules/
 
 !tests/releases/
 scorecard-out/
+*.reviews.json
