@@ -2,7 +2,7 @@
 // Everything it shows comes from findings.json (docs/OUTPUT-CONTRACT.md). It counts and formats; it computes no results.
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import './bench.css'
-import { loadFindings, releaseState, saveReview, setRelease, uploadRelease, usingExample, type ReleaseState } from './api'
+import { loadFindings, releaseState, reportUrl, saveReview, setRelease, uploadRelease, usingExample, type ReleaseState } from './api'
 import type { Analysis, FileInfo, Finding, Findings, Pointer, Repair, Review, Witness } from './findings'
 import { useTheme } from './theme'
 import { SectionBoundary } from './SectionBoundary'
@@ -395,9 +395,13 @@ function FilesAndDownload({ raw, doc }: { raw: Findings; doc: Doc }) {
           <p className="quiet">A file whose content is identical in both releases is never opened.</p>
         </div>
         <div className="card">
-          <h3>The report</h3>
-          <p>Everything on this page, including each person's decision, is in one file other tools can read.</p>
-          <p><button type="button" className="primary" onClick={download}>Download findings.json</button></p>
+          <h3>The report, in two forms</h3>
+          <p><strong>For people:</strong> the audit report says in plain English what changed, the proof, what it did to each result, the suggested fix and who reviewed it. Open it, print it or save it as a PDF.</p>
+          {reportUrl(doc.asked)
+            ? <p><a className="primary as-button" href={reportUrl(doc.asked) ?? undefined} download="audit-report.html">Download the audit report</a></p>
+            : <p className="quiet">The audit report is available when the page is comparing real releases.</p>}
+          <p><strong>For other tools:</strong> the same findings as one file the organisers' checker and the review team's tool can read.</p>
+          <p><button type="button" className="ghost" onClick={download}>Download findings.json</button></p>
           {failed && <p className="quiet" role="alert">The download could not be started.</p>}
           <p className="quiet">{text(x?.scope)}</p>
           <p className="quiet">{[x?.engine_version && `Engine ${x.engine_version}`, typeof x?.run_seconds === 'number' && `compared in ${x.run_seconds} s`].filter(Boolean).join(', ')}</p>

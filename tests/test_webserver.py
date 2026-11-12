@@ -149,6 +149,23 @@ class Server(unittest.TestCase):
         e.exception.close()
         self.assertEqual(e.exception.code, 400)
 
+    def test_the_audit_report_says_the_same_things_in_plain_english(self):
+        base, _ = self.live()
+        doc = json.loads(self.get(base + "/api/findings")[1])
+        key = doc["x_readyset"]["review_keys"]["F1"]
+        self.post(base + "/api/reviews", {"key": key, "status": "confirmed", "reviewer": "R. Engineer", "role": "research engineer"})
+        status, body, headers = self.get(base + "/api/report")
+        page = body.decode()
+        self.assertEqual(status, 200)
+        self.assertIn("text/html", headers["Content-Type"])
+        self.assertIn("audit-report.html", headers["Content-Disposition"])
+        for expected in ("Release audit report", "Conditional", "Samples exchanged", "Proof you can check",
+                         "What this cannot tell you", "Confirmed as a real problem by R. Engineer", "No language model wrote"):
+            self.assertIn(expected, page)
+        for sample in [e["id"] for e in doc["findings"][0]["evidence"] if e["kind"] == "sample"]:
+            self.assertIn(sample, page)                                           # every sample in the finding is named
+        self.assertIn("Ready", self.get(base + "/api/report?for=A2")[1].decode())  # the report follows the question
+
     def test_health(self):
         status, body, _ = self.get(self.start() + "/api/health")
         self.assertEqual((status, json.loads(body)["status"]), (200, "ok"))

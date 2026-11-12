@@ -64,3 +64,9 @@ export async function uploadRelease(files: File[], name: string, known: string[]
   progress('Comparing')
   return answer(await fetch(`${base}/api/release`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ batch, name }) }))
 }
+
+/** Where the plain-English audit report for the current question can be downloaded. Null when there is no server. */
+export function reportUrl(analyses: string[]): string | null {
+  if (usingExample) return null
+  return `${base}/api/report${analyses.length ? `?for=${encodeURIComponent(analyses.join(','))}` : ''}`
+}

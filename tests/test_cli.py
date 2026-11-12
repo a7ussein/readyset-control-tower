@@ -32,6 +32,17 @@ class Command(unittest.TestCase):
         self.assertIn("Conditional", p.stdout)
         self.assertEqual([r["name"] for r in doc["data"]["releases"]], ["A", "B"])
 
+    def test_it_can_also_write_the_plain_english_audit_report(self):
+        b = self.release("B", lambda r: r.swap(PROTEIN, P1, N1))
+        out, report = os.path.join(self.d, "findings.json"), os.path.join(self.d, "audit.html")
+        p = self.run_cli("compare", self.a, b, "--out", out, "--report", report, "--for", "A1")
+        self.assertEqual(p.returncode, 1, p.stderr)
+        with open(report, encoding="utf-8") as fh:
+            page = fh.read()
+        for expected in ("Release audit report", "Conditional", P1, N1, "Not yet reviewed", "Suggested fix"):
+            self.assertIn(expected, page)
+        self.assertEqual(self.run_cli("compare", self.a, b, "--report").returncode, 64)
+
     def test_exit_codes_for_the_other_verdicts(self):
         out = os.path.join(self.d, "f.json")
         self.assertEqual(self.run_cli("compare", self.a, self.release("same", lambda r: r), "--out", out).returncode, 0)

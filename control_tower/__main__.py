@@ -1,7 +1,8 @@
 """ReadySet Control Tower.
 
-  python3 -m control_tower compare RELEASE_A RELEASE_B [--out findings.json] [--for A1,A2] [--question FILE]
+  python3 -m control_tower compare RELEASE_A RELEASE_B [--out findings.json] [--report report.html] [--for A1,A2] [--question FILE]
         compare two release folders (the trusted one first) and write the findings
+        --report     also write the audit report: the same findings in plain English, as one page to open or print
         --for        the question: which registered analyses this release is needed for (default: all of them)
         --question   a JSON file listing analyses, registered ids or new ones (docs/OUTPUT-CONTRACT.md, "The question")
         exit code: 0 Ready, 1 Conditional, 2 Blocked, 3 Insufficient Evidence
@@ -38,7 +39,14 @@ def cmd_compare(args):
             return 64
         out = args[i + 1]
         del args[i:i + 2]
-    specs = None
+    specs, report = None, None
+    if "--report" in args:
+        i = args.index("--report")
+        if i + 1 >= len(args):
+            print("error: --report needs a file name", file=sys.stderr)
+            return 64
+        report = args[i + 1]
+        del args[i:i + 2]
     try:
         if "--for" in args:
             i = args.index("--for")
@@ -81,6 +89,11 @@ def cmd_compare(args):
     for a in doc["analyses"]:
         print(f"  {a['id']:4} {a['status']}")
     print(f"wrote {out}")
+    if report:
+        from .report import render
+        with open(report, "w", encoding="utf-8") as fh:
+            fh.write(render(doc))
+        print(f"wrote {report}")
     return EXIT[doc["verdict"]]
 
 

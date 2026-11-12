@@ -185,3 +185,5 @@ td.absent { font-style: italic; opacity: .85 } td.delta { color: var(--muted) } 
 }
 
 .waiting-note { text-align: center; color: var(--muted); margin-top: -18px }
+
+.as-button { display: inline-block; text-decoration: none }

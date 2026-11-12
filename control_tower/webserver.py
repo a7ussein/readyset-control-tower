@@ -88,7 +88,7 @@ class Handler(BaseHTTPRequestHandler):
             return 500, {"detail": f"{srv.findings_path} is not valid JSON"}
         return 200, doc
 
-    def _findings(self, wanted):
+    def _findings(self, wanted, as_report=False):
         status, doc = self._document(wanted)
         if status == 200 and isinstance(doc, dict) and isinstance(doc.get("findings"), list):
             new_release = release_name(doc)
@@ -99,6 +99,16 @@ class Handler(BaseHTTPRequestHandler):
                 x["review_keys"] = keys
                 x["reviews"] = [dict(saved[k], finding=fid, release=new_release) for fid, k in keys.items() if k in saved]
                 apply_reviews(doc, {fid: saved[k] for fid, k in keys.items() if k in saved})
+        if as_report and status == 200:
+            from .report import render
+            body = render(doc).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Disposition", 'attachment; filename="audit-report.html"')
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return self.wfile.write(body)
         self._json(status, doc)
 
     def _review(self):
@@ -238,6 +248,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, self._state())
             if path == "/api/findings":
                 return self._findings(parse_qs(urlsplit(self.path).query).get("for", [""])[0])
+            if path == "/api/report":
+                return self._findings(parse_qs(urlsplit(self.path).query).get("for", [""])[0], as_report=True)
             if path.startswith("/api/"):
                 return self._json(404, {"detail": f"no such endpoint: GET {path}"})
             self._static(path)

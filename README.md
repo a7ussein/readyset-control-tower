@@ -84,6 +84,10 @@ Or let the page compare the two folders itself, which also lets you change the q
 The page compares it straight away, and "Compare a different release" takes the next one. It remembers the trusted
 release, so after the first time plain `./run.sh` is enough.
 
+**The audit report.** Besides `findings.json` for other tools, the page offers "Download the audit report": the
+same findings in plain English as one page you can open, print or save as a PDF. From the command line add
+`--report audit.html`. Every sentence in it is built from the findings by a fixed pattern; no language model writes it.
+
 **The question.** The tool protects the analyses you say the release is needed for. On the page, switch them on and
 off in the bar under the verdict. On the command line, `--for A2` asks about A2 alone, and `--question FILE` takes
 your own analyses (see "The question" in [`docs/OUTPUT-CONTRACT.md`](docs/OUTPUT-CONTRACT.md)). For the practice
