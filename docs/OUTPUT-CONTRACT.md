@@ -1,6 +1,6 @@
 # Output contract: `findings.json`
 
-Status: **draft for the team to agree.** Nothing here has been run against real data.
+Status: **in use.** The engine writes exactly this, and its output passes the organisers' validator on the real data. The hand-written example below predates the engine and uses invented values.
 
 One file ties our three roles together. The engine writes it, the screen shows it, the self-test scores it, and on
 Saturday the organisers' checker and another team's Repair Review Desk read it. If it stays stable, nobody waits on
