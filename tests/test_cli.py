@@ -43,6 +43,32 @@ class Command(unittest.TestCase):
             self.assertIn(expected, page)
         self.assertEqual(self.run_cli("compare", self.a, b, "--report").returncode, 64)
 
+    def test_the_envelope_command_opens_compares_and_writes_both_reports(self):
+        # A stand-in for the organisers' repository: release A, and an unseal.py that "opens" an envelope into a folder.
+        repo = os.path.join(self.d, "challenge")
+        TinyRelease().write(os.path.join(repo, "data", "tcga-brca", "raw"))
+        sealed = TinyRelease().swap(PROTEIN, P1, N1).without_file(RNA).write(os.path.join(repo, "sealed"))
+        os.makedirs(os.path.join(repo, "envelopes"))
+        with open(os.path.join(repo, "envelopes", "unseal.py"), "w") as fh:
+            fh.write("import shutil, sys\n"
+                     "if sys.argv[2:] != ['amber', 'falcon', 'river', 'quartz']: sys.exit('that code does not open it')\n"
+                     f"shutil.copytree({sealed!r}, 'envelopes/opened/E' + sys.argv[1] + '/release')\n")
+        work = os.path.join(self.d, "work")
+        os.makedirs(work)
+        env = dict(os.environ, PYTHONPATH=HERE, PATH=os.path.dirname(sys.executable))        # no uv: use this Python
+        run = lambda *args: subprocess.run([sys.executable, "-m", "control_tower", "envelope", *args, "--challenge", repo, "--port", "1"],
+                                           capture_output=True, text=True, cwd=work, env=env)
+        bad = run("07", "wrong", "words", "entirely", "here")
+        self.assertNotEqual(bad.returncode, 0)
+        self.assertIn("did not open", bad.stderr)
+        p = run("07", "amber", "falcon", "river", "quartz")
+        self.assertEqual(p.returncode, 1, p.stderr)                                           # Conditional
+        with open(os.path.join(work, "findings.json")) as fh:
+            doc = json.load(fh)
+        self.assertEqual(([f["kind"] for f in doc["findings"]], doc["data"]["releases"][1]["name"]), (["sample_swap"], "E07"))
+        self.assertTrue(os.path.isfile(os.path.join(work, "audit-report.html")))
+        self.assertIn("page is not running", p.stdout)
+
     def test_exit_codes_for_the_other_verdicts(self):
         out = os.path.join(self.d, "f.json")
         self.assertEqual(self.run_cli("compare", self.a, self.release("same", lambda r: r), "--out", out).returncode, 0)

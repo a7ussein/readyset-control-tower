@@ -26,6 +26,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, unquote, urlsplit
 
+from .compare import _label
 from .release import FILES
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -154,8 +155,8 @@ class Handler(BaseHTTPRequestHandler):
         srv = self.server
         trusted, new = srv.releases or (None, None)
         return {"trusted": trusted, "new": new, "files": list(FILES),
-                "trusted_name": os.path.basename(os.path.normpath(trusted)) if trusted else None,
-                "new_name": os.path.basename(os.path.normpath(new)) if new else None}
+                "trusted_name": _label(trusted) if trusted else None,
+                "new_name": _label(new) if new else None}
 
     def _options(self, query):
         """What a new analysis can be built from, read from the trusted release: clinical columns, the values in one

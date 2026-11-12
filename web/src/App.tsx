@@ -756,7 +756,15 @@ export default function App() {
   const onQuestion = (ids: string[]) => { setAsked(ids); load(ids) }
   const [state, setState] = useState<ReleaseState | null>(null)
   useEffect(() => { releaseState().then(setState) }, [])
-  const onLoaded = (next: ReleaseState) => { setState(next); setAsked(undefined); try { history.replaceState(null, '', location.pathname) } catch { /* fine */ } load() }
+  // The envelope command can hand the page a new release from the terminal: notice it and show it.
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      const next = await releaseState()
+      if (next && state && (next.new !== state.new || next.trusted !== state.trusted)) { setDoc(undefined); setState(next); setAsked(undefined); load() }
+    }, 2000)
+    return () => clearInterval(timer)
+  })
+  const onLoaded = (next: ReleaseState) => { setDoc(undefined); setState(next); setAsked(undefined); try { history.replaceState(null, '', location.pathname) } catch { /* fine */ } load() }
   const valid = doc !== null && typeof doc === 'object' && !Array.isArray(doc)
   const raw = valid ? (doc as Findings) : null
   const releases = raw ? list<{ name?: unknown }>(raw.data?.releases).map(r => text(r.name)).filter(Boolean) : []
