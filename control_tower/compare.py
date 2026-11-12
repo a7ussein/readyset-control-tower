@@ -184,6 +184,7 @@ def compare(folder_a, folder_b):
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "run_seconds": round(time.time() - started, 2),
             "analyses_registered": [a.id for a in REGISTRY],
+            "analysis_titles": {a.id: a.title for a in REGISTRY},
             "files": files_info,
             "witness": witness,
             "scope": SCOPE},
