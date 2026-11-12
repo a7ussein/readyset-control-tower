@@ -94,7 +94,10 @@ review is saved in a small JSON file (`control-tower.reviews.json`, or beside th
 when you download `findings.json` from the page.
 
 `compare` prints the verdict, one line per file, each finding and which analyses were rerun. Its exit code is
-0 Ready, 1 Conditional, 2 Blocked, 3 Insufficient Evidence.
+0 Ready, 1 Conditional, 2 Blocked, 3 Insufficient Evidence. An exit code of 1 is an answer, not a failure.
+
+`$D` in these commands is only a shortcut for the organisers' data folder, set on the line above it. The trusted
+release always goes first and the new one second; the tool cannot tell if you swap them.
 
 Run the tests with `python3 -m unittest discover -s tests -t .`
 
