@@ -106,6 +106,9 @@ The format allows extra keys. Ours all sit under one key, `x_readyset`, so anoth
 | `files[]` with `status` and `opened` | The per-file line on the screen. `status` is `changed`, `unchanged` (never opened), `absent` (in neither release), `missing_in_one`, or `unreadable`. A changed file with no findings also has a `note`: its bytes differ but every value is the same (line endings, or row or column order). |
 | `witness` | Keyed by finding id, for findings about samples in a large file: one named `row` (ER-alpha in the protein file, otherwise the file's first row) and each sample's `before` and `after` value in it. A value is `null` where the sample is not in that release. A reader can open the two files and check the finding by eye. |
 | `analysis_titles` | The plain name of each registered analysis, keyed by id, for the screen. |
+| `analyses_in_question`, `analysis_reads`, `unrelated_findings` | The analyses this run was asked to protect, what each one reads in plain words, and how many findings touch none of them. |
+| `rules` | Keyed by finding id: `detected_by` (the check that found it), `impact` (one line per analysis in the question: touched or not, and what it reads) and `severity` (why this level). |
+| `review_keys`, `reviews`, `live` | Added by the page's server, never by `compare`: where a person's review attaches, the reviews recorded so far (`finding`, `status` of `confirmed` or `dismissed`, `reviewer`, `role`, `note`, `at`), and in live mode the analyses the page can switch between. |
 | `analyses_registered` | States the tool's scope in data. |
 | `scope` | The limitation sentence shown on screen. |
 | `example_notice` | Only in the hand-written example. |
@@ -135,3 +138,31 @@ These need the organisers or the team. Each could change this contract.
   (`format/examples/control-tower-practice-B.json`), or the part of `make_release.py` that builds the practice release.
 - Did not download or run anything on the real data. The `before` / `after` keys are copied from the analysis code;
   the values in the example are invented.
+
+
+## The question
+
+The question is which analyses the new release is needed for. It is an input, and the answer follows it.
+
+- `compare A B` protects every registered analysis (A1 and A2).
+- `compare A B --for A2` protects only A2. Findings that touch nothing A2 reads are still reported, at `low` severity,
+  and the verdict is `Ready`: nothing that changed is read by this question.
+- `compare A B --question q.json` takes a JSON list. Each entry is a registered id or a new analysis:
+
+```json
+[
+  {"id": "A2"},
+  {"id": "Q1", "type": "mean_by_group", "title": "HER2 protein by PR status",
+   "file": "protein_rppa.tsv.gz", "row": "HER2", "column": "PR_Status_nature2012", "groups": ["Positive", "Negative"]},
+  {"id": "Q2", "type": "category_mix", "title": "Histology mix", "column": "histological_type"}
+]
+```
+
+`mean_by_group` is the mean of one row of a measurement file for primary tumours, split by the groups of a clinical
+column (A1 is one of these). `category_mix` is how primary tumours divide among the values of a clinical column (A2 is
+one of these). A new analysis gets the same treatment as A1 and A2: the tool works out which changes touch it, reruns
+it only then, and reports before and after.
+
+**Verdict rule, restated with the question in it.** `Ready`: nothing changed, or nothing that changed is read by the
+question's analyses. `Conditional`: at least one finding touches an analysis in the question; it was rerun, and a person
+reviews. `Blocked`: a touched analysis cannot be rerun. `Insufficient Evidence`: a file is missing or unreadable.

@@ -123,3 +123,26 @@ details summary { cursor: pointer; color: var(--brand); font-size: 13.5px }
   .app-header, .verdict-bar, footer { padding-left: 16px; padding-right: 16px } .card { overflow-x: auto } .cell { font-size: 15px }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important } }
+
+/* the question */
+.question-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 28px; background: var(--surface); border-bottom: 1px solid var(--line) }
+.question-label { font: 600 13.5px var(--text) } .question-bar ul { display: flex; flex-wrap: wrap; gap: 8px }
+.ask { display: inline-flex; align-items: center; gap: 8px; font: 500 13.5px var(--text); padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--muted); transition: background .12s, border-color .12s }
+.ask .ref { color: inherit } button.ask:hover:not(:disabled) { border-color: var(--brand) } button.ask:disabled { cursor: default }
+.ask.on { background: var(--brand); border-color: var(--brand); color: var(--surface) } .ask.on.fixed { background: var(--brand-tint); color: var(--brand); border-color: transparent }
+button.ask::before { content: ""; width: 14px; height: 14px; border-radius: 4px; border: 1.5px solid currentColor; flex: none }
+button.ask.on::before { background: var(--surface); box-shadow: inset 0 0 0 3px var(--brand) }
+
+/* review and rules */
+.review-card { border-left: 4px solid var(--conditional) } .review-card.confirmed { border-left-color: var(--ready) } .review-card.dismissed { border-left-color: var(--faint) }
+.review-card h2 { gap: 10px; flex-wrap: wrap }
+.review-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px }
+.review-form label { display: grid; gap: 4px; font: 500 12.5px var(--text); color: var(--muted) } .review-form .wide { grid-column: 1 / -1 }
+.review-form input { font: 400 14.5px var(--text); color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; min-width: 0 }
+.review-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px }
+.ghost { border: 1px solid var(--line); border-radius: 8px; padding: 9px 16px; background: var(--surface); font-weight: 600 } .ghost:hover:not(:disabled) { border-color: var(--brand) }
+button:disabled { opacity: .5; cursor: not-allowed }
+.rules { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 8px 16px; margin: 0; font-size: 14px } .rules dt { color: var(--muted); font-weight: 500 } .rules dd { margin: 0 } .rules .line { display: block }
+.tick { width: 18px; height: 18px; flex: none; display: grid; place-items: center; border-radius: 999px; border: 1.5px dashed var(--faint); font: 700 11px var(--text); color: var(--surface) }
+.tick.done { border: 0; background: var(--ready) }
+@media (max-width: 960px) { .question-bar { padding-left: 16px; padding-right: 16px } .review-form, .rules { grid-template-columns: minmax(0, 1fr) } }

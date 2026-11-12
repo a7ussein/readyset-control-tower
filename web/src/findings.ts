@@ -15,6 +15,8 @@ export interface ReleaseFile { file: string; sha256: string; hash_of?: 'file' | 
 export interface FileInfo { file: string; status: 'changed' | 'unchanged' | 'absent' | 'missing_in_one' | 'unreadable'; opened: boolean; note?: string }
 // One named row of a large file, with each sample's value in both releases, so a reader can check a finding by hand.
 export interface Witness { file: string; row: string; releases: string[]; values: { sample: string; before: string | null; after: string | null }[] }
+// A person's review of one finding, recorded by the server beside the findings.
+export interface Review { finding: string; key: string; status: 'confirmed' | 'dismissed'; reviewer?: string; role?: string; note?: string; at?: string }
 export interface Findings {
   format_version: '0.2'
   producer: { team: string; product: string; track: string }
@@ -30,5 +32,10 @@ export interface Findings {
     files?: FileInfo[]
     witness?: Record<string, Witness>
     analysis_titles?: Record<string, string>
+    analyses_in_question?: string[]; analysis_reads?: Record<string, string>; unrelated_findings?: number
+    rules?: Record<string, { detected_by?: string; impact?: string[]; severity?: string }>
+    live?: { available: { id: string; title: string }[] }
+    review_keys?: Record<string, string>
+    reviews?: Review[]
   }
 }
