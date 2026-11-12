@@ -129,7 +129,8 @@ def main():
     for cfg in configs:
         cfg = os.path.abspath(cfg)
         with open(cfg) as fh:
-            name = json.load(fh)["name"]
+            spec = json.load(fh)
+        name = spec["name"]
 
         rel = os.path.join(challenge, "data", "tcga-brca", "releases", name)
         result = os.path.join(outdir, name + ".json")
@@ -141,6 +142,8 @@ def main():
                 print(f"{name:26} BUILD FAILED: {err.strip()[-300:]}")
                 all_clean = False
                 continue
+            for f in spec.get("remove_files", []):          # Saturday's envelope comes without the RNA file
+                os.remove(os.path.join(rel, f))
 
             # 2. Run our engine on release A and this release, and time it.
             start = time.time()
