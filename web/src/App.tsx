@@ -2,7 +2,7 @@
 // Everything it shows comes from findings.json (docs/OUTPUT-CONTRACT.md). It counts and formats; it computes no results.
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import './bench.css'
-import { loadFindings, releaseState, reportUrl, saveReview, setRelease, uploadRelease, usingExample, type ReleaseState } from './api'
+import { addAnalysis, analysisOptions, columnValues, loadFindings, releaseState, reportUrl, rowNames, saveReview, setRelease, uploadRelease, usingExample, type AnalysisOptions, type ReleaseState } from './api'
 import type { Analysis, FileInfo, Finding, Findings, Pointer, Repair, Review, Witness } from './findings'
 import { useTheme } from './theme'
 import { SectionBoundary } from './SectionBoundary'
@@ -32,6 +32,8 @@ function read(doc: Findings) {
     asked: (Array.isArray(x?.analyses_in_question) ? x.analyses_in_question : list<Analysis>(doc.analyses).map(a => a.id)).filter((v): v is string => typeof v === 'string'),
     reads: (x?.analysis_reads && typeof x.analysis_reads === 'object' ? x.analysis_reads : {}) as Record<string, unknown>,
     notes: (Array.isArray(x?.notes) ? x.notes : []).filter((n): n is string => typeof n === 'string'),
+    effects: (x?.effects && typeof x.effects === 'object' ? x.effects : {}) as NonNullable<NonNullable<Findings['x_readyset']>['effects']>,
+    priority: (x?.repair_priority && typeof x.repair_priority === 'object' ? x.repair_priority : {}) as Record<string, { level?: string; why?: string }>,
   }
 }
 type Doc = ReturnType<typeof read>
@@ -203,8 +205,8 @@ function flat(v: unknown): Record<string, unknown> | undefined {
   return out
 }
 
-function ResultTable({ analysis, releases }: { analysis: Analysis; releases: string[] }) {
-  const before = flat(analysis.before), after = flat(analysis.after)
+function ResultTable({ analysis, releases, own }: { analysis: Analysis; releases: string[]; own?: { before?: unknown; after?: unknown } }) {
+  const before = flat(own ? own.before : analysis.before), after = flat(own ? own.after : analysis.after)
   if (!before && !after) return <p className="quiet">{text(analysis.note, 'No numbers were recorded for this analysis.')}</p>
   const keys = [...new Set([...Object.keys(before ?? {}), ...Object.keys(after ?? {})])]
   return (
@@ -305,10 +307,12 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step }: {
   const evidence = list<Pointer>(finding.evidence)
   const rule = doc.rules[finding.id]
   const together = (id: string) => doc.findings.filter(f => Array.isArray(f.affects_analyses) && f.affects_analyses.includes(id)).map(f => f.id)
+  const own = (id: string) => doc.effects[finding.id]?.[id]
+  const percent = (v: unknown) => (typeof v === 'number' ? (v >= 1 ? 'more than 100%' : `${(v * 100).toFixed(v < 0.01 ? 2 : 1)}%`) : 'an unknown amount')
   return (
     <article className="panel" key={finding.id} aria-label={`Change ${index + 1} of ${total}`}>
       <header className="panel-head">
-        <p className="eyebrow">Change {index + 1} of {total} <span className="ref">{finding.id}</span><span className="sev">{KIND[finding.kind] ?? words(finding.kind)}</span><span className={`sev sev-${text(finding.severity)}`}>{text(finding.severity, 'unrated')} severity</span></p>
+        <p className="eyebrow">Change {index + 1} of {total} <span className="ref">{finding.id}</span>{' '}<span className="sev">{KIND[finding.kind] ?? words(finding.kind)}</span>{' '}<span className={`sev sev-${text(finding.severity)}`}>{text(finding.severity, 'unrated')} severity</span></p>
         <h2>{titleOf(finding)}</h2>
         <p className="lede">{text(finding.summary)}</p>
       </header>
@@ -326,8 +330,18 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step }: {
                 <p className="effect-head"><span className="ref">{id}</span> {nameOf(doc, id)}
                   <Chip tone={`st-${text(analysis?.status)}`}>{text(analysis?.status) === 'not_rerun' ? 'could not be rerun' : STATUS[text(analysis?.status)] ?? 'no result'}</Chip></p>
                 {text(analysis?.status) === 'not_rerun' && <p className="plain">{text(analysis?.note)}</p>}
-                {together(id).length > 1 && <p className="quiet">These numbers are the effect of all {together(id).length} changes that reach {id} together ({together(id).join(', ')}). The analysis is rerun once, with every change in.</p>}
-                {analysis && <ResultTable analysis={analysis} releases={doc.releases} />}
+                {own(id)
+                  ? <>
+                      <p className="plain">{own(id)?.size === 'none' ? 'On its own, this change leaves the result exactly the same.'
+                        : `On its own, this change moves the result ${own(id)?.size === 'small' ? 'slightly' : 'clearly'}: ${words(own(id)?.measure)} by ${percent(own(id)?.moved_by)}.`}
+                        <span className={`sev size-${text(own(id)?.size)}`}>{own(id)?.size === 'none' ? 'no effect' : `${text(own(id)?.size)} effect`}</span></p>
+                      {analysis && <ResultTable analysis={analysis} releases={[doc.releases[0] ?? 'before', 'this change alone']} own={own(id)} />}
+                      {together(id).length > 1 && <p className="quiet">With all {together(id).length} changes that reach {id} in ({together(id).join(', ')}), the result is the one shown under "What I need it for".</p>}
+                    </>
+                  : <>
+                      {together(id).length > 1 && <p className="quiet">These numbers are the effect of all {together(id).length} changes that reach {id} together ({together(id).join(', ')}).</p>}
+                      {analysis && <ResultTable analysis={analysis} releases={doc.releases} />}
+                    </>}
               </div>
             )
           })}
@@ -340,6 +354,7 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step }: {
             {repairs.length === 0 && <p className="quiet">None proposed.</p>}
             {repairs.map((r, i) => (
               <div key={text(r.id, String(i))}>
+                {doc.priority[text(r.id)]?.level && <p className={`urgency u-${text(doc.priority[text(r.id)].level).replace(/ /g, '-')}`}><b>{text(doc.priority[text(r.id)].level).replace(/^./, c => c.toUpperCase())}.</b> {text(doc.priority[text(r.id)].why)}</p>}
                 <p><strong>{words(r.action).replace(/^./, c => c.toUpperCase())}.</strong> {text(r.justification)}</p>
                 <TargetList items={list<Pointer>(r.targets)} limit={3} />
               </div>
@@ -422,6 +437,67 @@ function FilesAndDownload({ raw, doc }: { raw: Findings; doc: Doc }) {
         </div>
       </div>
     </section>
+  )
+}
+
+/** Build a new analysis from what the trusted release holds: no typing of file or column names from memory. */
+function AddAnalysis({ onAdded }: { onAdded: (id: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [options, setOptions] = useState<AnalysisOptions | null>(null)
+  const [kind, setKind] = useState<'mean_by_group' | 'category_mix'>('mean_by_group')
+  const [file, setFile] = useState('')
+  const [row, setRow] = useState('')
+  const [rows, setRows] = useState<string[]>([])
+  const [column, setColumn] = useState('')
+  const [values, setValues] = useState<{ value: string; samples: number }[]>([])
+  const [groups, setGroups] = useState<string[]>([])
+  const [problem, setProblem] = useState('')
+  const fail = (e: unknown) => setProblem(e instanceof Error ? e.message : String(e))
+  useEffect(() => { if (open && !options) analysisOptions().then(o => { setOptions(o); setFile(o.files.find(f => f.startsWith('protein')) ?? o.files[0] ?? '') }).catch(fail) }, [open, options])
+  useEffect(() => {
+    if (!(open && file && kind === 'mean_by_group')) return
+    let current = true                                     // only the answer to the latest typing counts
+    rowNames(file, row).then(r => { if (current) setRows(r.rows) }).catch(() => { if (current) setRows([]) })
+    return () => { current = false }
+  }, [open, file, row, kind])
+  useEffect(() => { setGroups([]); setValues([]); if (column) columnValues(column).then(v => setValues(v.values)).catch(fail) }, [column])
+  const ready = column && (kind === 'category_mix' || (file && row.trim() && groups.length > 0))
+  const submit = async () => {
+    setProblem('')
+    try {
+      const spec = kind === 'category_mix' ? { type: kind, column, title: `Mix of ${column}` }
+        : { type: kind, file, row: row.trim(), column, groups, title: `${row.trim()} by ${column}` }
+      const made = await addAnalysis(spec)
+      setOpen(false); setRow(''); setColumn(''); onAdded(made.id)
+    } catch (e) { fail(e) }
+  }
+  if (!open) return <li className="analysis add"><button type="button" className="ghost" onClick={() => setOpen(true)}>Add an analysis of your own</button>
+    <p className="quiet">Describe another result you rely on and the tool will protect it the same way.</p></li>
+  return (
+    <li className="analysis on add-form">
+      <b className="form-title">A new analysis</b>
+      <fieldset className="kinds">
+        <label><input type="radio" name="kind" checked={kind === 'mean_by_group'} onChange={() => setKind('mean_by_group')} /> Compare a measurement between groups</label>
+        <label><input type="radio" name="kind" checked={kind === 'category_mix'} onChange={() => setKind('category_mix')} /> Count tumours in each category</label>
+      </fieldset>
+      {kind === 'mean_by_group' && <>
+        <label>Which file holds the measurement?
+          <select id="add-file" value={file} onChange={e => { setFile(e.target.value); setRow('') }}>{(options?.files ?? []).map(f => <option key={f}>{f}</option>)}</select></label>
+        <label>Which row? Start typing a name.
+          <input id="add-row" value={row} onChange={e => setRow(e.target.value)} list="add-rows" placeholder="For example HER2" autoComplete="off" spellCheck={false} />
+          <datalist id="add-rows">{rows.map(r => <option key={r} value={r} />)}</datalist></label>
+      </>}
+      <label>{kind === 'mean_by_group' ? 'Split the samples by which clinical column?' : 'Which clinical column?'}
+        <select id="add-column" value={column} onChange={e => setColumn(e.target.value)}><option value="">Choose a column</option>{(options?.columns ?? []).map(c => <option key={c}>{c}</option>)}</select></label>
+      {kind === 'mean_by_group' && values.length > 0 && (
+        <fieldset className="groups"><legend>Which groups to compare? Pick two for a difference.</legend>
+          {values.map(v => <label key={v.value}><input type="checkbox" checked={groups.includes(v.value)} onChange={e => setGroups(g => e.target.checked ? [...g, v.value] : g.filter(x => x !== v.value))} /> {v.value} <span className="quiet">({v.samples})</span></label>)}
+        </fieldset>
+      )}
+      {problem && <p className="error inline" role="alert">{problem}</p>}
+      <p className="form-actions"><button type="button" className="primary" disabled={!ready} onClick={submit}>Add it to the question</button>
+        <button type="button" className="link" onClick={() => setOpen(false)}>Cancel</button></p>
+    </li>
   )
 }
 
@@ -586,7 +662,9 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
           : tone.means}</p>
         <p className="facts">
           <span className="verdict-chip">Verdict: {verdict || 'none'}</span>
-          {doc.files.length > 0 && <span>{changed.length === 0 ? `All ${doc.files.length} files are identical` : `${changed.length} of ${doc.files.length} files changed: ${changed.map(f => f.file.replace(/\.tsv(\.gz)?$/, '')).join(', ')}`}</span>}
+          {doc.files.length > 0 && <span>{changed.length === 0 ? `All ${doc.files.length} files are identical`
+            : (['changed', 'missing_in_one', 'unreadable'] as const).filter(k => changed.some(f => f.status === k)).map(k =>
+                `${changed.filter(f => f.status === k).length} of ${doc.files.length} files ${k === 'changed' ? 'changed' : k === 'unreadable' ? 'unreadable' : 'missing from one release'}: ${changed.filter(f => f.status === k).map(f => f.file.replace(/\.tsv(\.gz)?$/, '')).join(', ')}`).join('; ')}</span>}
           {doc.findings.length > 0 && touching < doc.findings.length && <span>{doc.findings.length - touching} {doc.findings.length - touching === 1 ? 'change does' : 'changes do'} not reach your analyses</span>}
           {doc.notes.map((n, i) => <span key={i} className="warn">{n}</span>)}
         </p>
@@ -621,6 +699,7 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
                 </li>
               )
             })}
+            {doc.available.length > 0 && <AddAnalysis onAdded={id => onQuestion([...doc.asked, id])} />}
           </ul>
         </section>
       )}

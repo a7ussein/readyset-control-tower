@@ -190,3 +190,14 @@ td.absent { font-style: italic; opacity: .85 } td.delta { color: var(--muted) } 
 
 .also { display: flex; align-items: center; gap: 8px; font: 500 14.5px var(--text) } .also input { width: 18px; height: 18px; accent-color: var(--brand) }
 @media (max-width: 900px) { .effect { overflow-x: visible } .effect table, .more-body table { display: block; overflow-x: auto } .effect > p { overflow-wrap: anywhere } .release-line p { min-width: 0; overflow-wrap: anywhere } }
+
+/* each change's own effect, sized fixes, and adding an analysis */
+.size-large { background: var(--point-tint); color: var(--point-ink) } .size-small { background: var(--conditional-tint); color: var(--conditional) } .size-none { background: var(--ready-tint); color: var(--ready) }
+.urgency { border-left: 3px solid var(--line); padding-left: 10px; font-size: 14.5px } .u-before-use { border-left-color: var(--point) } .u-small-effect { border-left-color: var(--conditional) } .u-no-effect-on-the-result { border-left-color: var(--ready) }
+.analysis.add { opacity: 1; border-style: dashed; box-shadow: none; background: transparent; justify-items: start }
+.add-form { gap: 12px } .form-title { font: 700 17px var(--display) }
+.add-form label { display: grid; gap: 4px; font: 500 13.5px var(--text); color: var(--muted) }
+.add-form select, .add-form input[type=text], .add-form input:not([type]) { font: 400 15px var(--text); color: var(--ink); background: var(--raised); border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; min-width: 0; width: 100% }
+.add-form fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px } .add-form legend { font: 500 13.5px var(--text); color: var(--muted); padding: 0; margin-bottom: 4px }
+.kinds label, .groups label { display: flex; align-items: center; gap: 8px; font: 500 15px var(--text); color: var(--ink) } .groups { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) }
+.form-actions { display: flex; align-items: center; gap: 16px }

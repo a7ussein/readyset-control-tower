@@ -108,6 +108,7 @@ The format allows extra keys. Ours all sit under one key, `x_readyset`, so anoth
 | `analysis_titles` | The plain name of each registered analysis, keyed by id, for the screen. |
 | `analyses_in_question`, `analysis_reads`, `unrelated_findings` | The analyses this run was asked to protect, what each one reads in plain words, and how many findings touch none of them. |
 | `rules` | Keyed by finding id: `detected_by` (the check that found it), `impact` (one line per analysis in the question: touched or not, and what it reads) and `severity` (why this level). |
+| `effects`, `repair_priority` | `effects[finding][analysis]`: what that finding does to that analysis on its own, with `before`, `after` (the analysis recomputed on the trusted release with only that finding's changes applied), `size` (`none`, `small` when no number moved by half a percent, else `large`), `measure` and `moved_by`. `repair_priority[repair]`: how urgent the fix is, sized by that effect (`before use`, `small effect`, `no effect on the result`, `for the record`). The shared `severity` field is unchanged by size, so it stays comparable with the organisers' reference output. |
 | `review_keys`, `reviews`, `live` | Added by the page's server, never by `compare`: where a person's review attaches, the reviews recorded so far (`finding`, `status` of `confirmed` or `dismissed`, `reviewer`, `role`, `note`, `at`), and in live mode the analyses the page can switch between. |
 | `analyses_registered` | States the tool's scope in data. |
 | `scope` | The limitation sentence shown on screen. |

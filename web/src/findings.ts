@@ -34,6 +34,8 @@ export interface Findings {
     analysis_titles?: Record<string, string>
     analyses_in_question?: string[]; analysis_reads?: Record<string, string>; unrelated_findings?: number
     notes?: string[]
+    effects?: Record<string, Record<string, { before?: Record<string, unknown>; after?: Record<string, unknown>; size?: 'none' | 'small' | 'large'; measure?: string | null; moved_by?: number }>>
+    repair_priority?: Record<string, { level?: string; why?: string }>
     rules?: Record<string, { detected_by?: string; impact?: string[]; severity?: string }>
     live?: { available: { id: string; title: string }[] }
     review_keys?: Record<string, string>

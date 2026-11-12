@@ -92,6 +92,7 @@ def render(doc):
     repairs = [r for r in doc.get("repairs", []) if isinstance(r, dict)]
     titles, reads, rules, witness = x.get("analysis_titles") or {}, x.get("analysis_reads") or {}, x.get("rules") or {}, x.get("witness") or {}
     reviews = {r.get("finding"): r for r in x.get("reviews") or [] if isinstance(r, dict)}
+    effects, priority = x.get("effects") or {}, x.get("repair_priority") or {}
     files = [f for f in x.get("files") or [] if isinstance(f, dict)]
     verdict = doc.get("verdict") or "No verdict"
     name = lambda i: f"{i} ({titles[i]})" if titles.get(i) else i
@@ -150,12 +151,27 @@ def render(doc):
         if affected:
             out.append(f"<p><b>What it does to the analyses.</b> It reaches {e(', '.join(name(i) for i in affected))}."
                        + (f" It does not reach {e(', '.join(f.get('not_affected_analyses') or []))}." if f.get("not_affected_analyses") else "") + "</p>")
+            for aid in affected:
+                own = (effects.get(fid) or {}).get(aid)
+                if not own:
+                    continue
+                if own.get("size") == "none":
+                    out.append(f"<p>On its own, this change leaves {e(aid)} exactly the same.</p>")
+                else:
+                    by = own.get("moved_by") or 0
+                    pct = "more than 100%" if by >= 1 else f"{by * 100:.{2 if by < 0.01 else 1}f}%"
+                    out.append(f"<p>On its own, this change moves {e(aid)} {'slightly' if own.get('size') == 'small' else 'clearly'}: "
+                               f"{e(str(own.get('measure', '')).replace('_', ' '))} by {pct}.</p>"
+                               + result_table({"before": own.get("before"), "after": own.get("after")}, [a_name, "this change alone"]))
         else:
             out.append("<p><b>What it does to the analyses.</b> Nothing. No analysis in the question reads what changed here.</p>")
         for r in repairs:
             if fid in (r.get("addresses") or []):
                 targets = [t.get("id") for t in r.get("targets", []) if isinstance(t, dict)]
-                out.append(f"<p><b>Suggested fix ({e(r.get('id'))}).</b> {e(str(r.get('action', '')).replace('_', ' ').capitalize())}. {e(r.get('justification', ''))}"
+                urgency = priority.get(r.get("id")) or {}
+                out.append(f"<p><b>Suggested fix ({e(r.get('id'))}).</b> "
+                           + (f"<i>{e(str(urgency.get('level', '')).capitalize())}: {e(urgency.get('why', ''))}</i> " if urgency.get("level") else "")
+                           + f"{e(str(r.get('action', '')).replace('_', ' ').capitalize())}. {e(r.get('justification', ''))}"
                            + (f" Applies to: <span class=ids>{e(', '.join(targets[:12]))}{' and more' if len(targets) > 12 else ''}</span>." if targets else "")
                            + " This is a suggestion only; the tool has changed nothing in the data.</p>")
         out.append(f"<p><b>What this cannot tell you.</b> {e(f.get('limitation', ''))}</p>")

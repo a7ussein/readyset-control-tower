@@ -70,3 +70,15 @@ export function reportUrl(analyses: string[]): string | null {
   if (usingExample) return null
   return `${base}/api/report${analyses.length ? `?for=${encodeURIComponent(analyses.join(','))}` : ''}`
 }
+
+export interface AnalysisOptions { columns: string[]; files: string[] }
+async function json<T>(response: Response): Promise<T> {
+  const body = await response.json().catch(() => ({}))
+  if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : `The server answered ${response.status}.`)
+  return body as T
+}
+/** What a new analysis can be built from, read from the trusted release. */
+export const analysisOptions = async () => json<AnalysisOptions>(await fetch(`${base}/api/options`))
+export const columnValues = async (column: string) => json<{ values: { value: string; samples: number }[]; distinct: number }>(await fetch(`${base}/api/options?column=${encodeURIComponent(column)}`))
+export const rowNames = async (file: string, typed: string) => json<{ rows: string[]; total: number }>(await fetch(`${base}/api/options?file=${encodeURIComponent(file)}&q=${encodeURIComponent(typed)}`))
+export const addAnalysis = async (spec: Record<string, unknown>) => json<{ id: string; title: string }>(await fetch(`${base}/api/question`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(spec) }))

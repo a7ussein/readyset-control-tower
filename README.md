@@ -93,6 +93,9 @@ off in the bar under the verdict. On the command line, `--for A2` asks about A2 
 your own analyses (see "The question" in [`docs/OUTPUT-CONTRACT.md`](docs/OUTPUT-CONTRACT.md)). For the practice
 release the answer is Conditional when A1 is in the question and Ready when only A2 is.
 
+On the page you can also press "Add an analysis of your own" and build one from the data's own files, rows and
+columns, with no file to write.
+
 **Review.** Every finding waits for a person. On its page, enter your name and role and confirm or dismiss it. The
 review is saved in a small JSON file (`control-tower.reviews.json`, or beside the findings file) and is included
 when you download `findings.json` from the page.
