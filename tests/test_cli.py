@@ -47,7 +47,8 @@ class Command(unittest.TestCase):
         out = os.path.join(self.d, "f.json")
         self.assertEqual(self.run_cli("compare", self.a, self.release("same", lambda r: r), "--out", out).returncode, 0)
         self.assertEqual(self.run_cli("compare", self.a, self.release("norow", lambda r: r.drop_row(PROTEIN, "ERALPHA")), "--out", out).returncode, 2)
-        self.assertEqual(self.run_cli("compare", self.a, self.release("nofile", lambda r: r.without_file(RNA)), "--out", out).returncode, 3)
+        self.assertEqual(self.run_cli("compare", self.a, self.release("nofile", lambda r: r.without_file(PROTEIN)), "--out", out).returncode, 3)
+        self.assertEqual(self.run_cli("compare", self.a, self.release("norna", lambda r: r.without_file(RNA)), "--out", out).returncode, 0)
 
     def test_a_folder_that_does_not_exist_is_a_plain_error(self):
         p = self.run_cli("compare", self.a, os.path.join(self.d, "nowhere"))

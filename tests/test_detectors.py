@@ -149,6 +149,27 @@ class Detectors(unittest.TestCase):
         unread = self.run_pair(lambda b: b.relabel(HISTOLOGY, P1, "Other"))
         self.assertEqual(unread["findings"][0]["severity"], "medium")
 
+    def test_a_release_without_a_file_no_analysis_reads_is_still_compared(self):
+        # Saturday's envelopes carry five files: no RNA. Neither registered analysis reads RNA.
+        doc = self.run_pair(lambda b: b.swap(PROTEIN, P1, N1).without_file(RNA))
+        self.assertEqual((doc["verdict"], self.kinds()), ("Conditional", ["sample_swap"]))     # no finding about RNA
+        rna = self.files()[RNA]
+        self.assertEqual((rna["status"], rna["opened"]), ("not_in_both", False))
+        self.assertIn("not compared", rna["note"])
+        self.assertTrue(any(RNA in n for n in doc["x_readyset"]["notes"]))
+        clean = self.run_pair(lambda b: b.without_file(RNA))
+        self.assertEqual((clean["verdict"], clean["findings"]), ("Ready", []))
+        needed = self.run_pair(lambda b: b.without_file(PROTEIN))                               # A1 reads this one
+        self.assertEqual(needed["verdict"], "Insufficient Evidence")
+
+    def test_an_opened_envelope_is_named_after_its_envelope_not_release(self):
+        d = tempfile.mkdtemp()
+        a = TinyRelease()
+        trusted = a.write(os.path.join(d, "raw"))
+        new = a.copy().swap(PROTEIN, P1, N1).write(os.path.join(d, "opened", "E07", "release"))
+        doc = compare(trusted, new)
+        self.assertEqual([r["name"] for r in doc["data"]["releases"]], ["raw", "E07"])
+
     def test_every_finding_says_which_rule_found_it_and_why_it_matters(self):
         doc = self.run_pair(lambda b: b.swap(PROTEIN, P1, N1))
         rule = doc["x_readyset"]["rules"][self.only("sample_swap")["id"]]

@@ -20,7 +20,8 @@ MEANS = {
 STATUS = {"changed": "was rerun and its result changed", "unchanged": "was rerun and its result is the same",
           "not_rerun": "was not rerun, because nothing it reads changed"}
 FILE_STATUS = {"changed": "content differs", "unchanged": "identical, not opened", "absent": "in neither release",
-               "missing_in_one": "missing in one release", "unreadable": "could not be read"}
+               "missing_in_one": "missing in one release", "not_in_both": "in only one release; not needed, so not compared",
+               "unreadable": "could not be read"}
 
 
 def e(value):
@@ -104,10 +105,11 @@ def render(doc):
                f"Generated {e(x.get('generated_at', ''))}.</p>")
 
     # ---- the answer
-    changed_files = [f["file"] for f in files if f.get("status") not in ("unchanged", "absent")]
+    changed_files = [f["file"] for f in files if f.get("status") not in ("unchanged", "absent", "not_in_both")]
+    files_compared = [f for f in files if f.get("status") not in ("absent", "not_in_both")]
     summary = [MEANS.get(verdict, "")]
     if files:
-        summary.append(f"{len(changed_files)} of the {len(files)} files {'differs' if len(changed_files) == 1 else 'differ'} between the releases"
+        summary.append(f"{len(changed_files)} of the {len(files_compared)} compared files {'differs' if len(changed_files) == 1 else 'differ'} between the releases"
                        + (f" ({', '.join(changed_files)})." if changed_files else "."))
     if findings:
         summary.append(f"{plural(len(findings), 'change')} {'was' if len(findings) == 1 else 'were'} found. "
@@ -124,7 +126,7 @@ def render(doc):
         summary.append(f"{len(decided)} of {plural(len(findings), 'change')} {'has' if len(decided) == 1 else 'have'} been reviewed by a person.")
     out.append(f"<section class='answer v-{e(verdict.lower().replace(' ', '-'))}'><p class=label>The question</p><p>{e(doc.get('question', ''))}</p>"
                f"<p class=label>The answer</p><p class=verdict>{e(verdict)}</p>" + "".join(f"<p>{e(s)}</p>" for s in summary if s)
-               + "".join(f"<p class=warn>{e(n)}</p>" for n in x.get("notes") or []) + "</section>")
+               + "".join(f"<p{'' if 'not compared' in n else ' class=warn'}>{e(n)}</p>" for n in x.get("notes") or []) + "</section>")
 
     # ---- each change
     if findings:

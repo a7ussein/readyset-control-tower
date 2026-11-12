@@ -37,9 +37,17 @@ DETECTED_BY = {
 }
 
 
+def _label(folder):
+    """A release is named after its folder. An opened envelope keeps its files in .../E07/release/, so a folder
+    called "release" takes its parent's name."""
+    path = os.path.normpath(os.path.abspath(folder))
+    name = os.path.basename(path)
+    return os.path.basename(os.path.dirname(path)) or name if name.lower() == "release" else name
+
+
 def _names(folder_a, folder_b):
-    a = os.path.basename(os.path.normpath(folder_a)) or "A"
-    b = os.path.basename(os.path.normpath(folder_b)) or "B"
+    a = _label(folder_a) or "A"
+    b = _label(folder_b) or "B"
     return ("A", "B") if a == b else (a, b)
 
 
@@ -74,6 +82,16 @@ def compare(folder_a, folder_b, analyses=None):
                 hashes[has].append({"file": file, "sha256": release.content_hash(pa or pb), "hash_of": "content"})
             except release.Unreadable:
                 pass
+            # A file one release does not carry is only a problem if an analysis needs it. Saturday's releases come
+            # without the RNA file, which neither registered analysis reads: say so, and compare everything else.
+            needed = any(file in a.files for a in list(REGISTRY) + [c for c in chosen if c not in REGISTRY])
+            if not needed:
+                files_info.append({"file": file, "status": "not_in_both", "opened": False,
+                                   "note": f"In {has} but not in {lacks}. No registered analysis reads it, so it was "
+                                           f"not compared."})
+                notes.append(f"{file} is in {has} but not in {lacks}. No registered analysis reads it, so it was not "
+                             f"compared and nothing is reported about it.")
+                continue
             files_info.append({"file": file, "status": "missing_in_one", "opened": False})
             insufficient = True
             raw.append({

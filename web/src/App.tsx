@@ -52,7 +52,7 @@ const VERDICT: Record<string, { tone: string; mark: string; means: string }> = {
 const STATUS: Record<string, string> = { changed: 'result changed', unchanged: 'rerun, same result', not_rerun: 'untouched' }
 const FILE_STATUS: Record<string, string> = {
   changed: 'content differs', unchanged: 'identical, not opened', absent: 'in neither release',
-  missing_in_one: 'missing in one release', unreadable: 'could not be read',
+  missing_in_one: 'missing in one release', not_in_both: 'in only one release; not needed, so not compared', unreadable: 'could not be read',
 }
 
 const samplesOf = (f: Finding) => list<Pointer>(f.evidence).filter(e => e.kind === 'sample')
@@ -645,7 +645,8 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
   const verdict = text(raw.verdict)
   const tone = VERDICT[verdict] ?? { tone: 'insufficient', mark: '?', means: '' }
   const touching = doc.findings.filter(f => Array.isArray(f.affects_analyses) && f.affects_analyses.length > 0).length
-  const changed = doc.files.filter(f => f.status !== 'unchanged' && f.status !== 'absent')
+  const changed = doc.files.filter(f => f.status !== 'unchanged' && f.status !== 'absent' && f.status !== 'not_in_both')
+  const compared = doc.files.filter(f => f.status !== 'absent' && f.status !== 'not_in_both').length
   const finding = doc.findings.find(f => f.id === current)
   const reached = (id: string) => doc.findings.some(f => Array.isArray(f.affects_analyses) && f.affects_analyses.includes(id))
   const newName = doc.releases[1] ?? 'the new release'
@@ -662,11 +663,11 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
           : tone.means}</p>
         <p className="facts">
           <span className="verdict-chip">Verdict: {verdict || 'none'}</span>
-          {doc.files.length > 0 && <span>{changed.length === 0 ? `All ${doc.files.length} files are identical`
+          {doc.files.length > 0 && <span>{changed.length === 0 ? `All ${compared} compared files are identical`
             : (['changed', 'missing_in_one', 'unreadable'] as const).filter(k => changed.some(f => f.status === k)).map(k =>
-                `${changed.filter(f => f.status === k).length} of ${doc.files.length} files ${k === 'changed' ? 'changed' : k === 'unreadable' ? 'unreadable' : 'missing from one release'}: ${changed.filter(f => f.status === k).map(f => f.file.replace(/\.tsv(\.gz)?$/, '')).join(', ')}`).join('; ')}</span>}
+                `${changed.filter(f => f.status === k).length} of ${compared} files ${k === 'changed' ? 'changed' : k === 'unreadable' ? 'unreadable' : 'missing from one release'}: ${changed.filter(f => f.status === k).map(f => f.file.replace(/\.tsv(\.gz)?$/, '')).join(', ')}`).join('; ')}</span>}
           {doc.findings.length > 0 && touching < doc.findings.length && <span>{doc.findings.length - touching} {doc.findings.length - touching === 1 ? 'change does' : 'changes do'} not reach your analyses</span>}
-          {doc.notes.map((n, i) => <span key={i} className="warn">{n}</span>)}
+          {doc.notes.map((n, i) => <span key={i} className={/not compared/.test(n) ? undefined : 'warn'}>{/not compared/.test(n) ? n.split('. ')[0].replace(/ is in .* but not in .*/, ' is not in the new release and is not needed') : n}</span>)}
         </p>
       </section>
 

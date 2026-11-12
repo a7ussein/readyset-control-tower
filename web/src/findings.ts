@@ -12,7 +12,7 @@ export interface Finding {
 export interface Analysis { id: string; status: 'changed' | 'unchanged' | 'not_rerun'; before?: Record<string, unknown>; after?: Record<string, unknown>; note?: string }
 export interface Repair { id: string; action: 'exclude' | 'relabel' | 'restore_from_previous_release' | 'flag_for_review' | 'other'; targets: Pointer[]; justification: string; addresses: string[] }
 export interface ReleaseFile { file: string; sha256: string; hash_of?: 'file' | 'content' }
-export interface FileInfo { file: string; status: 'changed' | 'unchanged' | 'absent' | 'missing_in_one' | 'unreadable'; opened: boolean; note?: string }
+export interface FileInfo { file: string; status: 'changed' | 'unchanged' | 'absent' | 'missing_in_one' | 'not_in_both' | 'unreadable'; opened: boolean; note?: string }
 // One named row of a large file, with each sample's value in both releases, so a reader can check a finding by hand.
 export interface Witness { file: string; row: string; releases: string[]; values: { sample: string; before: string | null; after: string | null }[] }
 // A person's review of one finding, recorded by the server beside the findings.

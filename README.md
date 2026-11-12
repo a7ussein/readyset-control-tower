@@ -75,6 +75,20 @@ Or let the page compare the two folders itself, which also lets you change the q
 ./run.sh serve $D/raw $D/releases/practice-B     # http://localhost:8010  (run.bat on Windows)
 ```
 
+**Saturday's sealed envelope.** The organisers hand over an envelope number and a four-word code. Open it in their
+repository, then give our tool the folder it creates (the practice envelope's code is public):
+
+```bash
+cd ../oncosys-hackathon-challenge
+python envelopes/unseal.py practice orange meadow pilot lantern     # needs their requirements installed
+cd ../readyset-control-tower
+python3 -m control_tower compare $D/raw ../oncosys-hackathon-challenge/envelopes/opened/practice/release --out findings.json
+```
+
+An envelope's release has five files and no RNA file. Neither registered analysis reads RNA, so the tool compares the
+other five, says the RNA file was not compared, and raises no finding about it. On the page, paste the same
+`envelopes/opened/.../release` path or drop that folder.
+
 **A release you have not seen.** Start the page with only the trusted release, then drop the new one on it:
 
 ```bash

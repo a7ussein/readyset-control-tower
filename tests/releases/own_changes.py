@@ -121,7 +121,7 @@ def cases(w):
         for s in two:
             rows[other_row][col[s]] = ""
     add("o2-blank-other-protein", f"{other_row_name} value blanked for two samples", PROTEIN, protein_edit(blank_other),
-        [f("missing_data", PROTEIN, two, [])], "Conditional", {"A1": "not_rerun", "A2": "not_rerun"})
+        [f("missing_data", PROTEIN, two, [])], "Ready", {"A1": "not_rerun", "A2": "not_rerun"})
 
     one = w.protein_with(er="Positive", n=1, skip=5)
 
@@ -142,7 +142,7 @@ def cases(w):
         protein_edit(lambda rows: rows.pop(era)), [f("other", PROTEIN, [], ["A1"])], "Blocked", None)
 
     add("o6-drop-other-row", f"the {other_row_name} row removed from the protein file", PROTEIN,
-        protein_edit(lambda rows: rows.pop(other_row)), [f("other", PROTEIN, [], [])], "Conditional",
+        protein_edit(lambda rows: rows.pop(other_row)), [f("other", PROTEIN, [], [])], "Ready",
         {"A1": "not_rerun", "A2": "not_rerun"})
 
     def shuffle(rows):
@@ -168,7 +168,7 @@ def cases(w):
             return cells
         rewrite(os.path.join(w.raw, MUTATION), dst, line=line)
     add("o8-edit-mutation-cells", "one mutation cell flipped for two samples", MUTATION, mut,
-        [f("other", MUTATION, m2, [])], "Conditional", {"A1": "not_rerun", "A2": "not_rerun"})
+        [f("other", MUTATION, m2, [])], "Ready", {"A1": "not_rerun", "A2": "not_rerun"})
 
     normals = [s for s in w.rna_samples if s[13:15] == "11"][:2]
 
@@ -183,7 +183,7 @@ def cases(w):
             return cells
         rewrite(os.path.join(w.raw, RNA), dst, line=line)
     add("o9-swap-normal-tissue-rna", "two normal-tissue samples swapped in the RNA file", RNA, rna,
-        [f("sample_swap", RNA, normals, [])], "Conditional", {"A1": "not_rerun", "A2": "not_rerun"})
+        [f("sample_swap", RNA, normals, [])], "Ready", {"A1": "not_rerun", "A2": "not_rerun"})
 
     x = w.protein_with(er="Positive", pam50="LumA", n=1, skip=2)[0]
     y = w.protein_with(er="Negative", pam50="Basal", n=1, skip=2)[0]
@@ -204,7 +204,7 @@ def cases(w):
 
     add("o12-add-clinical-column", "a new column added to the clinical file", CLINICAL,
         lambda dst: rewrite(C, dst, header=lambda h: h + ["site_audit_flag"], line=lambda cells, h: cells + ["ok"]),
-        [f("other", CLINICAL, [], [])], "Conditional", {"A1": "not_rerun", "A2": "not_rerun"})
+        [f("other", CLINICAL, [], [])], "Ready", {"A1": "not_rerun", "A2": "not_rerun"})
 
     er2 = w.protein_with(er="Positive", n=2, skip=12)
     k = w.clin_head.index(ER)
@@ -226,7 +226,7 @@ def cases(w):
                 r[t] = str(int(float(r[t] or 0)) + 400)
         save(dst, rows)
     add("o14-edit-survival-time", "survival time edited for two samples", SURVIVAL, surv,
-        [f("other", SURVIVAL, s2, [])], "Conditional", {"A1": "not_rerun", "A2": "not_rerun"})
+        [f("other", SURVIVAL, s2, [])], "Ready", {"A1": "not_rerun", "A2": "not_rerun"})
 
     def corrupt(dst):
         with open(dst, "wb") as fh:
@@ -299,7 +299,7 @@ def cases(w):
             cells[hk] = "Recoded"
         return cells
     add("o20-relabel-unread-column-700", "a column neither analysis reads relabelled for 700 samples", CLINICAL,
-        lambda dst: rewrite(C, dst, line=hist_many), [f("label_conflict", CLINICAL, many_h, [])], "Conditional",
+        lambda dst: rewrite(C, dst, line=hist_many), [f("label_conflict", CLINICAL, many_h, [])], "Ready",
         {"A1": "not_rerun", "A2": "not_rerun"})
 
     def shift_era(rows):
@@ -310,7 +310,7 @@ def cases(w):
 
     add("o22-rewrite-whole-rna-file", "every value in the 180 MB RNA file rewritten with an extra digit (25 million cells)",
         RNA, lambda dst: rewrite(os.path.join(w.raw, RNA), dst, line=lambda cells, h: [cells[0]] + [v + "0" for v in cells[1:]]),
-        [f("other", RNA, w.rna_samples, [])], "Conditional", {"A1": "not_rerun", "A2": "not_rerun"})
+        [f("other", RNA, w.rna_samples, [])], "Ready", {"A1": "not_rerun", "A2": "not_rerun"})
 
     by_patient = {}
     for r in w.surv[1:]:
@@ -325,7 +325,7 @@ def cases(w):
                 r[t] = str(int(float(r[t] or 0)) + 90)
         save(dst, rows)
     add("o23-update-shared-survival-record", "one patient's survival record updated; its tumour and normal rows change together",
-        SURVIVAL, surv_twins, [f("other", SURVIVAL, twins, [])], "Conditional", {"A1": "not_rerun", "A2": "not_rerun"})
+        SURVIVAL, surv_twins, [f("other", SURVIVAL, twins, [])], "Ready", {"A1": "not_rerun", "A2": "not_rerun"})
     return out
 
 
