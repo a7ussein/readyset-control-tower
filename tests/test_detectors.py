@@ -24,12 +24,55 @@ def samples(finding):
 
 @unittest.skipIf(compare is None, "the engine (control_tower.compare) does not exist yet")
 class Detectors(unittest.TestCase):
-    def run_pair(self, change):
+    def run_pair(self, change, analyses=None):
         a = TinyRelease()
         b = change(a.copy())
         d = tempfile.mkdtemp()
-        self.doc = compare(a.write(os.path.join(d, "A")), b.write(os.path.join(d, "B")))
+        self.doc = compare(a.write(os.path.join(d, "A")), b.write(os.path.join(d, "B")), analyses)
         return self.doc
+
+    # ---- 0. the question decides the answer -----------------------------------------------------------
+    def test_the_same_swap_is_conditional_for_a1_and_ready_for_a2(self):
+        swap = lambda b: b.swap(PROTEIN, P1, N1)
+        for_a1 = self.run_pair(swap, ["A1"])
+        self.assertEqual((for_a1["verdict"], self.only("sample_swap")["severity"]), ("Conditional", "high"))
+        self.assertEqual([a["id"] for a in for_a1["analyses"]], ["A1"])
+        for_a2 = self.run_pair(swap, ["A2"])
+        f = self.only("sample_swap")                                           # still reported, never hidden
+        self.assertEqual((for_a2["verdict"], f["severity"], f["affects_analyses"], f["not_affected_analyses"]),
+                         ("Ready", "low", [], ["A2"]))
+        self.assertEqual([(a["id"], a["status"]) for a in for_a2["analyses"]], [("A2", "not_rerun")])
+        self.assertEqual(for_a2["x_readyset"]["unrelated_findings"], 1)
+        self.assertIn("A2", for_a2["question"])
+        self.assertNotIn("A1", for_a2["question"])
+
+    def test_a_new_question_needs_no_new_code(self):
+        her2 = {"id": "Q1", "type": "mean_by_group", "title": "HER2 by ER status", "file": PROTEIN, "row": "HER2",
+                "column": ER, "groups": ["Positive", "Negative"]}
+        doc = self.run_pair(lambda b: b.set_cell(PROTEIN, "HER2", P1, ""), [her2])     # A1 ignores this cell; Q1 reads it
+        self.assertEqual(self.only("missing_data")["affects_analyses"], ["Q1"])
+        q1 = self.analysis("Q1")
+        self.assertEqual(q1["status"], "changed")
+        self.assertIn("mean_positive", q1["before"])
+        self.assertEqual(doc["x_readyset"]["analysis_titles"]["Q1"], "HER2 by ER status")
+        mix = {"id": "Q2", "type": "category_mix", "column": HISTOLOGY}
+        self.run_pair(lambda b: b.set_cell(PROTEIN, "HER2", P1, ""), [mix])
+        self.assertEqual((self.doc["verdict"], self.analysis("Q2")["status"]), ("Ready", "not_rerun"))
+
+    def test_a_question_that_cannot_be_built_is_refused(self):
+        from control_tower.analyses import BadQuestion
+        for bad in (["A9"], [], ["A1", "A1"], [{"id": "Q1", "type": "mean_by_group"}], [{"id": "Q1", "type": "magic"}],
+                    [{"id": "A1", "type": "category_mix", "column": ER}]):
+            with self.assertRaises(BadQuestion, msg=str(bad)):
+                self.run_pair(lambda b: b, bad)
+
+    def test_every_finding_says_which_rule_found_it_and_why_it_matters(self):
+        doc = self.run_pair(lambda b: b.swap(PROTEIN, P1, N1))
+        rule = doc["x_readyset"]["rules"][self.only("sample_swap")["id"]]
+        self.assertIn("fingerprint", rule["detected_by"])
+        self.assertTrue(any(line.startswith("A1 is touched") for line in rule["impact"]))
+        self.assertTrue(any(line.startswith("A2 is not touched") for line in rule["impact"]))
+        self.assertTrue(rule["severity"].startswith("High"))
 
     def kinds(self):
         return sorted(f["kind"] for f in self.doc["findings"])

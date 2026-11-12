@@ -11,7 +11,7 @@ import time
 from datetime import datetime, timezone
 
 from . import __version__, release
-from .analyses import ER, ER_ROW, PAM50, REGISTRY, CannotRun
+from .analyses import ER, PAM50, REGISTRY, CannotRun, question
 from .detect import compare_file
 from .release import FILES, PROTEIN
 
@@ -19,8 +19,22 @@ PRODUCER = {"team": "Automyte", "product": "Cohort Control Tower", "track": "coh
 SAME_VALUES = ("The file's bytes differ but every value is the same (for example line endings, or the order of rows "
                "or columns), so there is nothing to report.")
 WITNESS_SAMPLES = 12
-SCOPE = ("Protects only the analyses registered in the tool (A1, A2). Reports what changed between two releases, "
-         "not why. Research use only; no clinical claims.")
+SCOPE = ("Protects only the analyses named in the question. Reports what changed between two releases, not why. "
+         "Research use only; no clinical claims.")
+
+DETECTED_BY = {
+    "sample_swap": "Every sample's whole profile is fingerprinted over the rows both releases share. These samples' "
+                   "fingerprints in the new release equal each other's fingerprints in the trusted release.",
+    "duplicate": "A sample id in the new release has a fingerprint identical to a different sample's, and the two were "
+                 "not identical in the trusted release. An id that already existed counts as a copy only if at least "
+                 "half of its informative cells changed.",
+    "membership_change": "The set of sample ids in the file differs between the two releases. Ids that arrived as "
+                         "copies of another sample are reported separately as duplicates.",
+    "label_conflict": "The same sample holds a different value in the same clinical column in the two releases.",
+    "missing_data": "A cell that held a value in the trusted release is blank or a missing-value marker in the new one.",
+    "other": "The file's content differs in a way none of the specific rules explains, so the differing rows, columns "
+             "or cells are reported as they are.",
+}
 
 
 def _names(folder_a, folder_b):
@@ -29,17 +43,10 @@ def _names(folder_a, folder_b):
     return ("A", "B") if a == b else (a, b)
 
 
-def _protein_samples(folder):
-    path = release.path_of(folder, PROTEIN)
-    if not path:
-        return set()
-    try:
-        return set(release.header_of(path)[1:])
-    except (OSError, EOFError, UnicodeDecodeError, StopIteration):
-        return set()
-
-
-def compare(folder_a, folder_b):
+def compare(folder_a, folder_b, analyses=None):
+    """`analyses` is the question: the analyses this release is needed for, as registered ids or descriptions
+    (see analyses.from_spec). None means every registered analysis."""
+    chosen = question(analyses)
     started = time.time()
     rel_a, rel_b = _names(folder_a, folder_b)
     raw, files_info, hashes = [], [], {rel_a: [], rel_b: []}
@@ -94,15 +101,15 @@ def compare(folder_a, folder_b):
             raw.append(_unreadable(file, rel_b, str(e)))
 
     # Which analyses does each finding touch?
-    used = {a.id: a.used(folder_a) | a.used(folder_b) for a in REGISTRY}
-    protein_samples = _protein_samples(folder_a) | _protein_samples(folder_b)
+    used = {a.id: a.used(folder_a) | a.used(folder_b) for a in chosen}
+    in_file = {a.id: a.file_samples(folder_a) | a.file_samples(folder_b) for a in chosen}
     for f in raw:
-        f["affects"] = [a.id for a in REGISTRY
-                        if any(a.touched_by(ch, used[a.id], protein_samples) for ch in f["changes"])]
+        f["affects"] = [a.id for a in chosen
+                        if any(a.touched_by(ch, used[a.id], in_file[a.id]) for ch in f["changes"])]
 
     # Rerun only the analyses a finding touches.
     analyses, status_of, blocked = [], {}, False
-    for a in REGISTRY:
+    for a in chosen:
         because = [i for i, f in enumerate(raw) if a.id in f["affects"]]
         if not because:
             status_of[a.id] = "not_rerun"
@@ -145,13 +152,22 @@ def compare(folder_a, folder_b):
             "id": fid, "kind": f["kind"], "summary": f["summary"], "severity": severity,
             "confidence": f["confidence"], "evidence": f["evidence"],
             "affects_analyses": f["affects"],
-            "not_affected_analyses": [a.id for a in REGISTRY if a.id not in f["affects"]],
+            "not_affected_analyses": [a.id for a in chosen if a.id not in f["affects"]],
             "limitation": f["limitation"], "needs_human_review": True})
         for r in (f.get("repair"), f.get("extra_repair")):
             if r:
                 repairs.append({"id": f"R{len(repairs) + 1}", "action": r["action"], "targets": r["targets"],
                                 "justification": r["justification"], "addresses": [fid]})
-    witness = _witness(raw, folder_a, folder_b, rel_a, rel_b)
+    witness = _witness(raw, folder_a, folder_b, rel_a, rel_b, chosen)
+    rules = {}
+    for f, raw_f in zip(findings, raw):
+        reads = [f"{a.id} {'is touched' if a.id in raw_f['affects'] else 'is not touched'}: it reads {a.reads()}."
+                 for a in chosen]
+        why = {"high": "High: a protected analysis was rerun and its result changed.",
+               "medium": "Medium: it touches samples a protected analysis reads, but the result held, or it is lost "
+                         "coverage, which is never rated above medium.",
+               "low": "Low: it touches nothing a protected analysis reads."}[f["severity"]]
+        rules[f["id"]] = {"detected_by": DETECTED_BY.get(f["kind"], DETECTED_BY["other"]), "impact": reads, "severity": why}
     for entry in analyses:
         because = entry.pop("_because", None)
         if because is not None and "note" not in entry:
@@ -163,10 +179,10 @@ def compare(folder_a, folder_b):
         verdict = "Insufficient Evidence"
     elif blocked:
         verdict = "Blocked"
-    elif findings:
+    elif any(f["affects_analyses"] for f in findings):
         verdict = "Conditional"
     else:
-        verdict = "Ready"
+        verdict = "Ready"                # nothing changed, or nothing that changed is read by the question's analyses
 
     return {
         "format_version": "0.2",
@@ -174,7 +190,7 @@ def compare(folder_a, folder_b):
         "data": {"dataset": "TCGA-BRCA (event frozen release)",
                  "releases": [{"name": rel_a, "files": hashes[rel_a]}, {"name": rel_b, "files": hashes[rel_b]}]},
         "question": f"Did anything change between release {rel_a} and release {rel_b} that affects analysis "
-                    + " or ".join(a.id for a in REGISTRY) + "?",
+                    + " or ".join(a.id for a in chosen) + "?",
         "verdict": verdict,
         "findings": findings,
         "analyses": analyses,
@@ -184,18 +200,22 @@ def compare(folder_a, folder_b):
             "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "run_seconds": round(time.time() - started, 2),
             "analyses_registered": [a.id for a in REGISTRY],
-            "analysis_titles": {a.id: a.title for a in REGISTRY},
+            "analyses_in_question": [a.id for a in chosen],
+            "analysis_titles": {a.id: a.title for a in list(REGISTRY) + [c for c in chosen if c not in REGISTRY]},
+            "analysis_reads": {a.id: a.reads() for a in chosen},
+            "unrelated_findings": sum(1 for f in findings if not f["affects_analyses"]),
+            "rules": rules,
             "files": files_info,
             "witness": witness,
             "scope": SCOPE},
     }
 
 
-def _witness(raw, folder_a, folder_b, rel_a, rel_b):
+def _witness(raw, folder_a, folder_b, rel_a, rel_b, chosen):
     """For each finding about samples in a large file: one named row, with each sample's value in both releases.
 
     A reader can open the two files, find that row, and check the finding by eye. The row is the one an analysis
-    reads when the file has one (ER-alpha in the protein file), otherwise the file's first row."""
+    in the question reads when the file has one (ER-alpha in the protein file for A1), otherwise the file's first row."""
     out, rows = {}, {}
     for i, f in enumerate(raw, 1):
         file = f.get("file")
@@ -213,7 +233,8 @@ def _witness(raw, folder_a, folder_b, rel_a, rel_b):
                     rows[file] = None
                 else:
                     names = release.row_names(pa)
-                    name = ER_ROW if (file == PROTEIN and ER_ROW in names) else (names[0] if names else None)
+                    wanted = [a.row for a in chosen if a.file == file and a.row in names]
+                    name = wanted[0] if wanted else (names[0] if names else None)
                     rows[file] = name and (name, release.one_row(pa, name)[1], release.one_row(pb, name)[1])
             if not rows[file] or rows[file][1] is None or rows[file][2] is None:
                 continue
