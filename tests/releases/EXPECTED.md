@@ -17,3 +17,8 @@
 | t12 | one duplicate naming 3 copies, each with its LumA source; one membership_change naming 3 Basal samples that left; all in the mutation file | not touched | not touched | Conditional |
 
 In every test: nothing reported that was not planted, and the output passes the organisers' validator.
+
+**Note, 12 Nov, before any scorecard run:** the team changed the verdict rule for the 20-point "reasoning for the
+question" criterion. The verdict is now Ready when nothing that changed is read by the question's analyses;
+those findings stay listed at low severity. Under this rule t6, t7, t9 and t12 expect Ready, not Conditional.
+The rows above are kept exactly as first written.
