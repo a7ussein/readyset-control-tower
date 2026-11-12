@@ -292,9 +292,13 @@ def compare_file(file, path_a, path_b, rel_a, rel_b, describe=None):
         truly_gone = [s for s in gone if s not in renamed_old]
         repair = None
         if truly_gone:
-            repair = {"action": "restore_from_previous_release", "targets": [_sample(s, file, rel_a) for s in truly_gone],
-                      "justification": f"{_plural(len(truly_gone), 'sample')} in {rel_a} {'is' if len(truly_gone) == 1 else 'are'} "
-                                       f"missing from {rel_b}."}
+            # As in the organisers' reference output: a sample that vanished is a question for whoever made the
+            # release, not something to patch over.
+            repair = {"action": "flag_for_review", "targets": [_sample(s, file, rel_a) for s in truly_gone],
+                      "justification": f"Ask the data provider why {_plural(len(truly_gone), 'sample')} in {rel_a} "
+                                       f"{'is' if len(truly_gone) == 1 else 'are'} missing from {rel_b}"
+                                       + (f" (coverage lost, {lost})" if lost else "") + ". Until that is answered, "
+                                       f"results that need them cover fewer samples than before."}
         elif c["renames"]:
             repair = {"action": "flag_for_review", "targets": [_sample(n, file, rel_b) for _, n in c["renames"]],
                       "justification": "The same measurements appear under a different sample id. A person should "

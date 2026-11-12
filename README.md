@@ -126,10 +126,27 @@ The event's frozen TCGA-BRCA release, fetched with the organisers' `data/tcga-br
 committed to this repository. The data is de-identified but patient-derived: research use only, no re-identification,
 no clinical claims.
 
+## Outputs to look at
+
+The files the tool writes for the organisers' practice release, so you can see them without running anything:
+
+- [`examples/practice-B.findings.json`](examples/practice-B.findings.json): the findings in the shared format (v0.2). It passes `format/validate.py`.
+- [`examples/practice-B.audit-report.html`](examples/practice-B.audit-report.html): the same findings in plain English. Download it and open it in a browser.
+
+Demo video: to be linked here before the code freeze.
+
 ## Team
 
 Ordi (@ordibimvy) · James (@Bjay4910) · Ahmed Hussein (@a7ussein)
 
 ## Licence
 
-Apache-2.0. Third-party code and its licences will be listed here.
+Apache-2.0.
+
+Third-party code, all used only by the page in `web/` (the engine uses nothing but Python's standard library):
+
+| What | Licence |
+|---|---|
+| React and React DOM | MIT |
+| Red Hat Display, Red Hat Text and Red Hat Mono typefaces (via Fontsource) | SIL Open Font License 1.1 |
+| Vite, TypeScript and their type packages (build tools only, not shipped) | MIT, Apache-2.0 |
