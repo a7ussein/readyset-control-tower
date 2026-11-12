@@ -183,3 +183,5 @@ td.absent { font-style: italic; opacity: .85 } td.delta { color: var(--muted) } 
   .panel-main { overflow-x: visible } .effect, .more-body { overflow-x: auto } .release-box { padding: 20px 18px } .path-row { grid-template-columns: minmax(0, 1fr) }
   .targets code { white-space: normal; overflow-wrap: anywhere; word-break: normal }
 }
+
+.waiting-note { text-align: center; color: var(--muted); margin-top: -18px }

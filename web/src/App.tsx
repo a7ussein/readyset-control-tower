@@ -690,11 +690,15 @@ export default function App() {
         {error && <p className="error" role="alert">{error}</p>}
         {doc === undefined && !error && <p className="quiet pad">Comparing the two releases…</p>}
         {doc !== undefined && !valid && <p className="error" role="alert">findings.json did not contain a result.</p>}
-        {raw && (usingExample || raw.x_readyset?.example_notice) && (
+        {raw && !(state?.trusted && !state.new) && (usingExample || raw.x_readyset?.example_notice) && (
           <p className="demo-note">{raw.x_readyset?.example_notice ?? 'Showing the hand-written example file.'}</p>
         )}
         {working && raw && <p className="working" role="status">Comparing the two releases…</p>}
-        {raw && <SectionBoundary name="result"><div className={working ? 'stale' : undefined}><Bench raw={raw} onQuestion={onQuestion} onChanged={() => load(asked)}
+        {state?.trusted && !state.new && (
+          <div className="page"><ReleaseBox key={`${state.trusted}|waiting`} state={state} onLoaded={onLoaded} />
+            <p className="waiting-note">Nothing is being compared yet. Give it a new release and the answer appears here.</p></div>
+        )}
+        {raw && !(state?.trusted && !state.new) && <SectionBoundary name="result"><div className={working ? 'stale' : undefined}><Bench raw={raw} onQuestion={onQuestion} onChanged={() => load(asked)}
           release={state && <ReleaseBox key={`${state.trusted}|${state.new}`} state={state} onLoaded={onLoaded} />} /></div></SectionBoundary>}
       </main>
       <footer>Built by team Automyte. De-identified TCGA research data. Research use only, not a clinical tool.</footer>
