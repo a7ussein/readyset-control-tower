@@ -161,6 +161,20 @@ class Detectors(unittest.TestCase):
         self.assertEqual((clean["verdict"], clean["findings"]), ("Ready", []))
         needed = self.run_pair(lambda b: b.without_file(PROTEIN))                               # A1 reads this one
         self.assertEqual(needed["verdict"], "Insufficient Evidence")
+        other = self.run_pair(lambda b: b.swap(PROTEIN, P1, N1).without_file(SURVIVAL))        # nobody reads it, but it vanished
+        gone = [f for f in other["findings"] if any(e.get("id") == SURVIVAL for e in f["evidence"])]
+        self.assertEqual((len(gone), gone[0]["affects_analyses"], other["verdict"]), (1, [], "Conditional"))
+        self.assertEqual(self.files()[SURVIVAL]["status"], "missing_in_one")
+        alone = self.run_pair(lambda b: b.without_file(SURVIVAL))
+        self.assertEqual((alone["verdict"], len(alone["findings"])), ("Ready", 1))             # reported; no analysis is stopped
+
+    def test_fewer_files_in_the_trusted_folder_hints_that_they_are_swapped(self):
+        d = tempfile.mkdtemp()
+        a = TinyRelease()
+        five = a.copy().without_file(RNA).write(os.path.join(d, "envelope"))
+        six = a.write(os.path.join(d, "raw"))
+        self.assertTrue(any("wrong way round" in n for n in compare(five, six)["x_readyset"]["notes"]))
+        self.assertFalse(any("wrong way round" in n for n in compare(six, five)["x_readyset"]["notes"]))
 
     def test_an_opened_envelope_is_named_after_its_envelope_not_release(self):
         d = tempfile.mkdtemp()

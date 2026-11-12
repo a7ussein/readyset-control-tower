@@ -16,6 +16,10 @@ from .detect import compare_file
 from .release import FILES, PROTEIN
 
 PRODUCER = {"team": "Automyte", "product": "Cohort Control Tower", "track": "cohort-firewall"}
+# The organisers' envelopes are defined as five files: the RNA file is left out on purpose (envelopes/README.md in their
+# repository). Its absence is noted, never reported. Any other file going missing is a finding.
+LEFT_OUT_BY_DESIGN = {"rna_hiseq.tsv.gz"}
+
 SAME_VALUES = ("The file's bytes differ but every value is the same (for example line endings, or the order of rows "
                "or columns), so there is nothing to report.")
 WITNESS_SAMPLES = 12
@@ -85,15 +89,18 @@ def compare(folder_a, folder_b, analyses=None):
             # A file one release does not carry is only a problem if an analysis needs it. Saturday's releases come
             # without the RNA file, which neither registered analysis reads: say so, and compare everything else.
             needed = any(file in a.files for a in list(REGISTRY) + [c for c in chosen if c not in REGISTRY])
-            if not needed:
+            if not needed and file in LEFT_OUT_BY_DESIGN:
                 files_info.append({"file": file, "status": "not_in_both", "opened": False,
                                    "note": f"In {has} but not in {lacks}. No registered analysis reads it, so it was "
                                            f"not compared."})
                 notes.append(f"{file} is in {has} but not in {lacks}. No registered analysis reads it, so it was not "
                              f"compared and nothing is reported about it.")
+                if has == rel_b:
+                    notes.append(f"{rel_a} holds fewer files than {rel_b}. The two folders may be the wrong way round: "
+                                 f"the trusted release goes first.")
                 continue
             files_info.append({"file": file, "status": "missing_in_one", "opened": False})
-            insufficient = True
+            insufficient = insufficient or needed            # a file no analysis needs does not stop the comparison
             raw.append({
                 "kind": "other", "file": file, "confidence": "high",
                 "summary": f"{file} is in {has} but not in {lacks}, so the two releases cannot be compared for this file.",
@@ -360,8 +367,9 @@ def _effects(raw, findings, repairs, chosen, folder_a, folder_b):
             priority[r["id"]] = {"level": "before use", "why": "These samples carry another sample's data. The effect on this "
                                  "result is small or none, but anything else computed from them is wrong too."}
         elif "small" in sizes:
-            priority[r["id"]] = {"level": "small effect", "why": "On its own this finding moves a result by less than half a "
-                                 "percent. Fix it, or accept it and say so in your methods."}
+            priority[r["id"]] = {"level": "small effect", "why": "On its own this finding moves no headline number of a result by "
+                                 "half a percent or more. Confirm it with the data provider; if you use the release "
+                                 "anyway, say so in your methods."}
         else:
             priority[r["id"]] = {"level": "no effect on the result", "why": "It touches samples a result reads, but on its own "
                                  "the result is the same. Fix it when convenient."}

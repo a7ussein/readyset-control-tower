@@ -400,14 +400,29 @@ def release_folder(path, staging):
     return path
 
 
-def remember_trusted(path, settings=SETTINGS):
+def _settings(settings):
+    try:
+        with open(settings, encoding="utf-8") as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def remember(settings=SETTINGS, **values):
+    """Keep small facts between runs: the trusted release, and the port the page is on."""
     if not settings:
         return
     try:
+        data = dict(_settings(settings), **values)
         with open(settings, "w", encoding="utf-8") as fh:
-            json.dump({"trusted": path}, fh)
+            json.dump(data, fh)
     except OSError:
         pass
+
+
+def remember_trusted(path, settings=SETTINGS):
+    remember(settings, trusted=path)
 
 
 def default_trusted():
@@ -577,6 +592,7 @@ def main(argv):
         print(f"Could not start on port {port}: {e.strerror or e}.\n"
               f"Try another port:  python3 -m control_tower serve --port {port + 1}", file=sys.stderr)
         return 1
+    remember(port=port)
     url = f"http://localhost:{port}"
     print(f"ReadySet Control Tower is running at {url}   (Ctrl+C to stop)", flush=True)
     if releases and all(releases):

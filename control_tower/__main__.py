@@ -128,6 +128,11 @@ def cmd_envelope(args):
     import urllib.request
     args = list(args)
     challenge, port = None, int(os.environ.get("PORT") or 8010)
+    try:                                                    # the page says which port it is on when it starts
+        with open("control-tower.settings.json", encoding="utf-8") as fh:
+            port = int(json.load(fh).get("port") or port)
+    except (OSError, ValueError, AttributeError, TypeError):
+        pass
     for flag in ("--challenge", "--port"):
         if flag in args:
             i = args.index(flag)

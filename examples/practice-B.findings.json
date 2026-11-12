@@ -359,8 +359,8 @@
   ],
   "x_readyset": {
     "engine_version": "0.1.0",
-    "generated_at": "2026-11-12T02:40:49+00:00",
-    "run_seconds": 0.83,
+    "generated_at": "2026-11-12T22:57:13+00:00",
+    "run_seconds": 0.86,
     "analyses_registered": [
       "A1",
       "A2"
@@ -487,7 +487,7 @@
       },
       "R3": {
         "level": "small effect",
-        "why": "On its own this finding moves a result by less than half a percent. Fix it, or accept it and say so in your methods."
+        "why": "On its own this finding moves no headline number of a result by half a percent or more. Confirm it with the data provider; if you use the release anyway, say so in your methods."
       }
     },
     "files": [

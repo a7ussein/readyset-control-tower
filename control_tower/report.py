@@ -162,8 +162,11 @@ def render(doc):
                 else:
                     by = own.get("moved_by") or 0
                     pct = "more than 100%" if by >= 1 else f"{by * 100:.{2 if by < 0.01 else 1}f}%"
-                    out.append(f"<p>On its own, this change moves {e(aid)} {'slightly' if own.get('size') == 'small' else 'clearly'}: "
-                               f"{e(str(own.get('measure', '')).replace('_', ' '))} by {pct}.</p>"
+                    small = own.get("size") == "small"
+                    out.append(f"<p>On its own, this change moves {e(aid)} {'only slightly' if small else 'clearly'}: "
+                               f"{e(str(own.get('measure', '')).replace('_', ' '))} by {pct}"
+                               + (", and no headline number (the difference, a group mean or a share) by half a percent." if small
+                                  else ". Half a percent on a headline number is the line.") + "</p>"
                                + result_table({"before": own.get("before"), "after": own.get("after")}, [a_name, "this change alone"]))
         else:
             out.append("<p><b>What it does to the analyses.</b> Nothing. No analysis in the question reads what changed here.</p>")

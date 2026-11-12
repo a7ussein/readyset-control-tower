@@ -333,7 +333,9 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step }: {
                 {own(id)
                   ? <>
                       <p className="plain">{own(id)?.size === 'none' ? 'On its own, this change leaves the result exactly the same.'
-                        : `On its own, this change moves the result ${own(id)?.size === 'small' ? 'slightly' : 'clearly'}: ${words(own(id)?.measure)} by ${percent(own(id)?.moved_by)}.`}
+                        : own(id)?.size === 'small'
+                          ? `On its own, this change moves the result only slightly: ${words(own(id)?.measure)} by ${percent(own(id)?.moved_by)}, and no headline number (the difference, a group mean or a share) by half a percent.`
+                          : `On its own, this change moves the result clearly: ${words(own(id)?.measure)} by ${percent(own(id)?.moved_by)}. Half a percent on a headline number is the line.`}
                         <span className={`sev size-${text(own(id)?.size)}`}>{own(id)?.size === 'none' ? 'no effect' : `${text(own(id)?.size)} effect`}</span></p>
                       {analysis && <ResultTable analysis={analysis} releases={[doc.releases[0] ?? 'before', 'this change alone']} own={own(id)} />}
                       {together(id).length > 1 && <p className="quiet">With all {together(id).length} changes that reach {id} in ({together(id).join(', ')}), the result is the one shown under "What I need it for".</p>}

@@ -103,7 +103,7 @@ The format allows extra keys. Ours all sit under one key, `x_readyset`, so anoth
 | Key | For |
 |---|---|
 | `run_seconds`, `generated_at`, `engine_version` | The verdict banner. |
-| `files[]` with `status` and `opened` | The per-file line on the screen. `status` is `changed`, `unchanged` (never opened), `absent` (in neither release), `missing_in_one` (an analysis needs it, so the verdict is Insufficient Evidence), `not_in_both` (one release does not carry it and no registered analysis reads it, so it is not compared and no finding is raised), or `unreadable`. A changed file with no findings also has a `note`: its bytes differ but every value is the same (line endings, or row or column order). |
+| `files[]` with `status` and `opened` | The per-file line on the screen. `status` is `changed`, `unchanged` (never opened), `absent` (in neither release), `missing_in_one` (an analysis needs it, so the verdict is Insufficient Evidence), `not_in_both` (the RNA file, which the organisers' envelopes leave out by design and no registered analysis reads: it is noted, not compared, and no finding is raised; any other file missing from one release is a finding), or `unreadable`. A changed file with no findings also has a `note`: its bytes differ but every value is the same (line endings, or row or column order). |
 | `witness` | Keyed by finding id, for findings about samples in a large file: one named `row` (ER-alpha in the protein file, otherwise the file's first row) and each sample's `before` and `after` value in it. A value is `null` where the sample is not in that release. A reader can open the two files and check the finding by eye. |
 | `analysis_titles` | The plain name of each registered analysis, keyed by id, for the screen. |
 | `analyses_in_question`, `analysis_reads`, `unrelated_findings` | The analyses this run was asked to protect, what each one reads in plain words, and how many findings touch none of them. |
@@ -146,7 +146,7 @@ These need the organisers or the team. Each could change this contract.
 The question is which analyses the new release is needed for. It is an input, and the answer follows it.
 
 - `compare A B` protects every registered analysis (A1 and A2).
-- `compare A B --for A2` protects only A2. Findings that touch nothing A2 reads are still reported, at `low` severity,
+- `compare A B --for A2` protects only A2. Findings that touch nothing A2 reads are still reported, at the severity their kind carries,
   and the verdict is `Ready`: nothing that changed is read by this question.
 - `compare A B --question q.json` takes a JSON list. Each entry is a registered id or a new analysis:
 
