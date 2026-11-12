@@ -201,3 +201,5 @@ td.absent { font-style: italic; opacity: .85 } td.delta { color: var(--muted) } 
 .add-form fieldset { border: 0; margin: 0; padding: 0; display: grid; gap: 6px } .add-form legend { font: 500 13.5px var(--text); color: var(--muted); padding: 0; margin-bottom: 4px }
 .kinds label, .groups label { display: flex; align-items: center; gap: 8px; font: 500 15px var(--text); color: var(--ink) } .groups { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)) }
 .form-actions { display: flex; align-items: center; gap: 16px }
+
+@media (max-width: 900px) { .proof > :first-child { max-width: 100% } .proof-table { display: block; overflow-x: auto; max-width: calc(100vw - 72px) } .proof-table th, .proof-table td { white-space: nowrap } }

@@ -78,6 +78,10 @@ class Handler(BaseHTTPRequestHandler):
                         srv.cache[key] = compare(srv.releases[0], srv.releases[1], [srv.available[i] for i in ids])
                     except BadQuestion as e:
                         return 400, {"detail": str(e)}
+                    except Exception as e:                       # never drop the connection: say what went wrong
+                        sys.stderr.write(f"  comparison failed: {type(e).__name__}: {e}\n")
+                        return 500, {"detail": f"The comparison failed ({type(e).__name__}). Check that both folders hold "
+                                               f"the release's files, with the trusted release first."}
                 doc = json.loads(json.dumps(srv.cache[key]))
             x = doc.setdefault("x_readyset", {})
             x["live"] = {"available": [{"id": i, "title": x.get("analysis_titles", {}).get(i) or srv.titles.get(i, i)}

@@ -52,13 +52,13 @@ def compare(folder_a, folder_b, analyses=None):
     if wrong:
         raise BadQuestion("the question does not fit the trusted release. " + "; ".join(wrong))
     started = time.time()
+    rel_a, rel_b = _names(folder_a, folder_b)
     notes = []
     if os.path.realpath(folder_a) == os.path.realpath(folder_b):
         notes.append("Both releases are the same folder, so there was nothing to compare.")
     elif os.path.isfile(os.path.join(folder_a, "CHANGES.json")) and not os.path.isfile(os.path.join(folder_b, "CHANGES.json")):
         notes.append(f"{rel_a} holds a CHANGES.json, which the organisers' script writes into a release it has altered. "
                      f"The two folders may be the wrong way round: the trusted release goes first.")
-    rel_a, rel_b = _names(folder_a, folder_b)
     raw, files_info, hashes = [], [], {rel_a: [], rel_b: []}
     insufficient = False
 
@@ -225,7 +225,7 @@ def compare(folder_a, folder_b, analyses=None):
     }
 
 
-SMALL = 0.005        # a result that moved, but by less than half a percent in every number, moved only slightly
+SMALL = 0.005        # below half a percent on every headline number, a result moved only slightly
 
 
 def _flat(result):
@@ -238,23 +238,43 @@ def _flat(result):
     return out
 
 
-def _size(before, after):
-    """('none' | 'small' | 'large', the measure that moved most, by how much as a fraction)."""
-    b, a = _flat(before), _flat(after)
-    if b == a:
-        return "none", None, 0.0
+def _headline(result):
+    """The numbers a reader would quote from a result: the difference between groups if there is one, else the group
+    means, else the shares. Sample counts are not headline numbers."""
+    flat = _flat(result)
+    for pick in (lambda k: k == "difference", lambda k: k.startswith("mean_"), lambda k: k.startswith("percent: ")):
+        keys = [k for k in flat if pick(k)]
+        if keys:
+            return keys
+    return list(flat)
+
+
+def _most(b, a, keys):
     worst, most = None, 0.0
-    for k in set(b) | set(a):
+    for k in keys:
         x, y = b.get(k), a.get(k)
         if x == y:
             continue
-        if isinstance(x, (int, float)) and isinstance(y, (int, float)) and x:
-            rel = abs(y - x) / abs(x)
-        else:
-            rel = 1.0                                    # a number appeared, vanished, or moved off zero
+        rel = abs(y - x) / abs(x) if isinstance(x, (int, float)) and isinstance(y, (int, float)) and x else 1.0
         if rel > most:
             worst, most = k, rel
-    return ("small" if most < SMALL else "large"), worst, round(most, 5)
+    return worst, most
+
+
+def _size(before, after):
+    """('none' | 'small' | 'large', the measure that moved most, by how much as a fraction).
+
+    Large: a headline number moved by half a percent or more. Small: the result changed, but no headline number moved
+    that far (for example only the sample counts changed)."""
+    b, a = _flat(before), _flat(after)
+    if b == a:
+        return "none", None, 0.0
+    worst, most = _most(b, a, sorted(set(_headline(before)) | set(_headline(after))))
+    if worst is not None and most >= SMALL:
+        return "large", worst, round(most, 5)
+    if worst is None:
+        worst, most = _most(b, a, sorted(set(b) | set(a)))
+    return "small", worst, round(most, 5)
 
 
 def _effects(raw, findings, repairs, chosen, folder_a, folder_b):
@@ -288,8 +308,13 @@ def _effects(raw, findings, repairs, chosen, folder_a, folder_b):
         sizes = [e["size"] for e in effects.get(fid, {}).values()]
         if not f["affects_analyses"]:
             priority[r["id"]] = {"level": "for the record", "why": "Nothing in the question reads what this finding touches."}
-        elif "large" in sizes or (not sizes and f["severity"] == "high"):
-            priority[r["id"]] = {"level": "before use", "why": "On its own this finding moves a result you rely on."}
+        elif not sizes:
+            priority[r["id"]] = {"level": "before use", "why": "An analysis you rely on cannot be rerun until this is resolved."}
+        elif "large" in sizes:
+            priority[r["id"]] = {"level": "before use", "why": "On its own this finding clearly moves a result you rely on."}
+        elif f["kind"] in ("sample_swap", "duplicate"):
+            priority[r["id"]] = {"level": "before use", "why": "These samples carry another sample's data. The effect on this "
+                                 "result is small or none, but anything else computed from them is wrong too."}
         elif "small" in sizes:
             priority[r["id"]] = {"level": "small effect", "why": "On its own this finding moves a result by less than half a "
                                  "percent. Fix it, or accept it and say so in your methods."}

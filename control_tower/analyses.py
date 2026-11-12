@@ -227,8 +227,17 @@ class CategoryMix:
     def problem(self, folder):
         c = release.path_of(folder, CLINICAL)
         try:
-            if c and self.column not in release.read_rows(c)[0]:
-                return f"{self.id}: there is no column called {self.column} in {CLINICAL}"
+            if c:
+                columns, clinical = release.read_rows(c)
+                if self.column not in columns:
+                    return f"{self.id}: there is no column called {self.column} in {CLINICAL}"
+                values = [cells.get(self.column) for s, cells in clinical.items()
+                          if is_primary(s) and not _missing(cells.get(self.column))]
+                if not values:
+                    return f"{self.id}: no primary tumour has a value in {self.column}"
+                if len(set(values)) > 30 and len(set(values)) > len(values) / 4:
+                    return (f"{self.id}: {self.column} holds {len(set(values))} different values across {len(values)} tumours, "
+                            f"so counting tumours in each one says nothing. Pick a column with a handful of categories")
         except (release.Unreadable, OSError, EOFError, UnicodeDecodeError):
             return None
         return None

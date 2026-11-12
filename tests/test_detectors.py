@@ -104,7 +104,37 @@ class Detectors(unittest.TestCase):
         self.assertEqual(level[by_file[PROTEIN]], "before use")                   # it moves A1
         self.assertEqual(level[by_file[COPY_NUMBER]], "for the record")           # nothing in the question reads it
         same = self.run_pair(lambda b: b.swap(PROTEIN, P1, P2))                   # both ER positive: A1 holds
-        self.assertEqual(same["x_readyset"]["repair_priority"][same["repairs"][0]["id"]]["level"], "no effect on the result")
+        fix = same["x_readyset"]["repair_priority"][same["repairs"][0]["id"]]
+        self.assertEqual(fix["level"], "before use")                              # wrong identities are never "when convenient"
+        self.assertIn("another sample's data", fix["why"])
+        gone = self.run_pair(lambda b: b.drop_row(PROTEIN, "ERALPHA"))            # A1 cannot run at all
+        why = [gone["x_readyset"]["repair_priority"][r["id"]]["why"] for r in gone["repairs"]]
+        self.assertTrue(all("moves a result" not in w for w in why))
+
+    def test_the_folders_the_wrong_way_round_get_a_hint_not_a_crash(self):
+        d = tempfile.mkdtemp()
+        a = TinyRelease()
+        trusted = a.write(os.path.join(d, "trusted"))
+        altered = a.copy().swap(PROTEIN, P1, N1).write(os.path.join(d, "altered"))
+        with open(os.path.join(altered, "CHANGES.json"), "w") as fh:
+            fh.write("{}")
+        doc = compare(altered, trusted)
+        self.assertIn("wrong way round", doc["x_readyset"]["notes"][0])
+        self.assertEqual(compare(trusted, altered)["x_readyset"]["notes"], [])
+
+    def test_only_headline_numbers_make_an_effect_large(self):
+        from control_tower.compare import _size
+        base = {"n_samples": 100, "n_positive": 60, "n_negative": 40, "mean_positive": 2.0, "mean_negative": -1.0, "difference": 3.0}
+        self.assertEqual(_size(base, dict(base, n_samples=103, n_positive=63))[0], "small")       # only counts moved
+        self.assertEqual(_size(base, dict(base, difference=3.004))[0], "small")                    # 0.13 percent
+        self.assertEqual(_size(base, dict(base, difference=3.05))[:2], ("large", "difference"))    # 1.7 percent
+        self.assertEqual(_size(base, dict(base))[0], "none")
+
+    def test_a_meaningless_category_question_is_refused(self):
+        from control_tower.analyses import BadQuestion, CategoryMix
+        self.assertIsNone(CategoryMix("Q", "mix", HISTOLOGY).problem(TinyRelease().write(os.path.join(tempfile.mkdtemp(), "A"))))
+        with self.assertRaises(BadQuestion):
+            self.run_pair(lambda b: b, [{"id": "Q1", "type": "category_mix", "column": "no_such_column"}])
 
     def test_every_finding_says_which_rule_found_it_and_why_it_matters(self):
         doc = self.run_pair(lambda b: b.swap(PROTEIN, P1, N1))
