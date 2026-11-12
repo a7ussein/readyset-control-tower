@@ -42,6 +42,22 @@ def _round(x, places):
     return None if x != x else round(x, places)
 
 
+def _clinical_change(clinical, clin_a, clin_b, ch):
+    """Apply one change to a copy of the trusted clinical table, taking the changed part from the new release."""
+    scope, s = ch["scope"], ch.get("sample")
+    if scope == "column":
+        for sample in set(clinical) | set(clin_b):
+            if sample in clin_b:
+                clinical[sample] = dict(clinical.get(sample, {}), **{ch["key"]: clin_b[sample].get(ch["key"], "")})
+    elif scope == "profile":
+        if s in clin_b:
+            clinical[s] = clin_b[s]
+        else:
+            clinical.pop(s, None)
+    elif scope == "cell" and s in clin_b:
+        clinical[s] = dict(clinical.get(s, clin_a.get(s, {})), **{ch["key"]: clin_b[s].get(ch["key"], "")})
+
+
 class MeanByGroup:
     """The mean of one named row of a measurement file, for primary tumours, split by the groups of a clinical column."""
     kind = "mean_by_group"
@@ -105,7 +121,38 @@ class MeanByGroup:
             return set()
 
     def run(self, folder):
-        clinical, samples, row = self.inputs(folder)
+        return self.compute(*self.inputs(folder))
+
+    def with_only(self, before, after, changes):
+        """The trusted release's inputs with just these changes applied: what the analysis would read if this one
+        finding were the only difference. `before` and `after` are inputs() of the two releases."""
+        (clin_a, samples_a, row_a), (clin_b, samples_b, row_b) = before, after
+        clinical, samples, row = dict(clin_a), list(samples_a), dict(row_a)
+        in_b = set(samples_b)
+        for ch in changes:
+            scope, file = ch["scope"], ch["file"]
+            if scope == "file":
+                if file == self.file:
+                    samples, row = list(samples_b), dict(row_b)
+                elif file == CLINICAL:
+                    clinical = dict(clin_b)
+            elif file == self.file:
+                s = ch.get("sample")
+                if scope == "row" and ch["key"] == self.row:
+                    row = dict(row_b)
+                elif scope == "profile" or (scope == "cell" and ch["key"] == self.row):
+                    if s in in_b:
+                        if s not in samples:
+                            samples.append(s)
+                        row[s] = row_b.get(s)
+                    elif scope == "profile":
+                        samples = [x for x in samples if x != s]
+                        row.pop(s, None)
+            elif file == CLINICAL:
+                _clinical_change(clinical, clin_a, clin_b, ch)
+        return clinical, samples, row
+
+    def compute(self, clinical, samples, row):
         used = self._used(clinical, samples)
         values = {g: [] for g in self.groups}
         sizes = {g: 0 for g in self.groups}
@@ -190,7 +237,20 @@ class CategoryMix:
         return set()
 
     def run(self, folder):
-        clinical = self.inputs(folder)
+        return self.compute(self.inputs(folder))
+
+    def with_only(self, before, after, changes):
+        """`before` and `after` are the clinical tables of the two releases."""
+        clinical = dict(before)
+        for ch in changes:
+            if ch["file"] == CLINICAL:
+                if ch["scope"] == "file":
+                    clinical = dict(after)
+                else:
+                    _clinical_change(clinical, before, after, ch)
+        return clinical
+
+    def compute(self, clinical):
         counts = {}
         for s, cells in clinical.items():
             if is_primary(s) and not _missing(cells.get(self.column)):

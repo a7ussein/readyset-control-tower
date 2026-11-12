@@ -83,6 +83,29 @@ class Detectors(unittest.TestCase):
         self.assertEqual(doc["verdict"], "Ready")
         self.assertIn("same folder", doc["x_readyset"]["notes"][0])
 
+    def test_each_finding_carries_its_own_effect_not_the_combined_one(self):
+        # Two changes reach A1: a swap across ER groups, and one blanked ER-alpha value.
+        doc = self.run_pair(lambda b: b.swap(PROTEIN, P1, N1).set_cell(PROTEIN, "ERALPHA", P2, ""))
+        swap, blank = self.only("sample_swap"), self.only("missing_data")
+        fx = doc["x_readyset"]["effects"]
+        alone_swap, alone_blank = fx[swap["id"]]["A1"], fx[blank["id"]]["A1"]
+        combined = self.analysis("A1")["after"]
+        self.assertEqual(alone_swap["before"], self.analysis("A1")["before"])
+        self.assertEqual(alone_swap["after"]["mean_positive"], 0.933)             # the swap alone, as in the swap test
+        self.assertNotEqual(alone_swap["after"], combined)                        # the combined result includes the blank too
+        self.assertNotEqual(alone_blank["after"], combined)
+        self.assertEqual(alone_swap["size"], "large")
+        self.assertIn(alone_swap["measure"], alone_swap["after"])
+
+    def test_a_fix_is_sized_to_what_its_finding_does(self):
+        doc = self.run_pair(lambda b: b.swap(PROTEIN, P1, N1).swap(COPY_NUMBER, P1, N1))
+        level = {r["addresses"][0]: doc["x_readyset"]["repair_priority"][r["id"]]["level"] for r in doc["repairs"]}
+        by_file = {f["evidence"][0]["file"]: f["id"] for f in doc["findings"]}
+        self.assertEqual(level[by_file[PROTEIN]], "before use")                   # it moves A1
+        self.assertEqual(level[by_file[COPY_NUMBER]], "for the record")           # nothing in the question reads it
+        same = self.run_pair(lambda b: b.swap(PROTEIN, P1, P2))                   # both ER positive: A1 holds
+        self.assertEqual(same["x_readyset"]["repair_priority"][same["repairs"][0]["id"]]["level"], "no effect on the result")
+
     def test_every_finding_says_which_rule_found_it_and_why_it_matters(self):
         doc = self.run_pair(lambda b: b.swap(PROTEIN, P1, N1))
         rule = doc["x_readyset"]["rules"][self.only("sample_swap")["id"]]

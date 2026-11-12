@@ -153,6 +153,72 @@ class Handler(BaseHTTPRequestHandler):
                 "trusted_name": os.path.basename(os.path.normpath(trusted)) if trusted else None,
                 "new_name": os.path.basename(os.path.normpath(new)) if new else None}
 
+    def _options(self, query):
+        """What a new analysis can be built from, read from the trusted release: clinical columns, the values in one
+        column, and the row names of a measurement file that match some typed text."""
+        from . import release
+        trusted = (self.server.releases or (None, None))[0]
+        clinical = release.path_of(trusted, release.CLINICAL) if trusted else None
+        if not clinical:
+            return self._json(400, {"detail": "set the trusted release first"})
+        try:
+            if query.get("column"):
+                columns, table = release.read_rows(clinical)
+                column = query["column"][0]
+                if column not in columns:
+                    return self._json(400, {"detail": f"there is no column called {column}"})
+                counts = {}
+                for sample, cells in table.items():
+                    if release.is_primary(sample) and cells.get(column, "") not in release.EMPTY:
+                        counts[cells[column]] = counts.get(cells[column], 0) + 1
+                top = sorted(counts.items(), key=lambda kv: -kv[1])[:20]
+                return self._json(200, {"values": [{"value": v, "samples": n} for v, n in top], "distinct": len(counts)})
+            if query.get("file"):
+                file = os.path.basename(query["file"][0])
+                path = release.path_of(trusted, file) if file in FILES and file != release.CLINICAL else None
+                if not path:
+                    return self._json(400, {"detail": f"{file} is not a measurement file in the trusted release"})
+                with self.server.lock:
+                    if file not in self.server.rows:
+                        self.server.rows[file] = release.row_names(path)
+                    names = self.server.rows[file]
+                typed = query.get("q", [""])[0].lower()
+                hits = [n for n in names if n.lower().startswith(typed)] + [n for n in names if typed in n.lower() and not n.lower().startswith(typed)]
+                return self._json(200, {"rows": hits[:25], "total": len(names)})
+            columns, _ = release.read_rows(clinical)
+            files = [f for f in FILES if f != release.CLINICAL and release.path_of(trusted, f)
+                     and release.layout(release.path_of(trusted, f)) == "column"]
+            return self._json(200, {"columns": columns, "files": files})
+        except (release.Unreadable, OSError) as e:
+            return self._json(400, {"detail": str(e)})
+
+    def _add_question(self):
+        """Add an analysis described on the page to the ones the question can be built from."""
+        from .analyses import BadQuestion, from_spec
+        srv = self.server
+        trusted = (srv.releases or (None, None))[0]
+        try:
+            spec = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 20000)) or b"{}")
+            if not isinstance(spec, dict):
+                raise ValueError
+        except ValueError:
+            return self._json(400, {"detail": "expected an analysis description"})
+        with srv.lock:
+            n = 1
+            while f"Q{n}" in srv.available:
+                n += 1
+            spec = dict(spec, id=f"Q{n}")
+            try:
+                analysis = from_spec(spec)
+                wrong = analysis.problem(trusted) if trusted else None
+                if wrong:
+                    raise BadQuestion(wrong.split(": ", 1)[-1][:1].upper() + wrong.split(": ", 1)[-1][1:] + ".")
+            except BadQuestion as e:
+                return self._json(400, {"detail": str(e)})
+            srv.available[analysis.id] = spec
+            srv.titles[analysis.id] = analysis.title
+        self._json(200, {"id": analysis.id, "title": analysis.title})
+
     def _upload(self, query):
         """One file of a release being dropped on the page, saved into a staging folder for that drop."""
         name = os.path.basename(query.get("name", [""])[0])
@@ -227,8 +293,10 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             parts = urlsplit(self.path)
-            if parts.path in ("/api/upload", "/api/release") and not self._local_only():
+            if parts.path in ("/api/upload", "/api/release", "/api/question") and not self._local_only():
                 return
+            if parts.path == "/api/question":
+                return self._add_question()
             if parts.path == "/api/upload":
                 return self._upload(parse_qs(parts.query))
             if parts.path == "/api/release":
@@ -261,6 +329,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(200, {"status": "ok", "service": "readyset-control-tower"})
             if path == "/api/state":
                 return self._json(200, self._state())
+            if path == "/api/options":
+                return self._options(parse_qs(urlsplit(self.path).query))
             if path == "/api/findings":
                 return self._findings(parse_qs(urlsplit(self.path).query).get("for", [""])[0])
             if path == "/api/report":
@@ -429,6 +499,7 @@ def make_server(host="127.0.0.1", port=8010, findings=None, quiet=False, release
     httpd.findings_path = findings or EXAMPLE
     httpd.releases, httpd.lock, httpd.cache, httpd.memory = releases, threading.Lock(), {}, {}
     httpd.settings_path = settings
+    httpd.rows = {}
     httpd.staging = tempfile.mkdtemp(prefix="readyset-release-")
     atexit.register(shutil.rmtree, httpd.staging, True)
     httpd.available = {a.id: a.id for a in REGISTRY}

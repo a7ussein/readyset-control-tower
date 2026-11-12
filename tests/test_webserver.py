@@ -218,6 +218,29 @@ class Server(unittest.TestCase):
             self.assertIn(sample, page)                                           # every sample in the finding is named
         self.assertIn("Ready", self.get(base + "/api/report?for=A2")[1].decode())  # the report follows the question
 
+    def test_a_new_analysis_can_be_built_on_the_page_from_what_the_data_holds(self):
+        from tests.tiny_release import ER, HISTOLOGY, PROTEIN
+        base, _ = self.live()
+        options = json.loads(self.get(base + "/api/options")[1])
+        self.assertIn(ER, options["columns"])
+        self.assertIn(PROTEIN, options["files"])
+        self.assertEqual(json.loads(self.get(base + f"/api/options?file={PROTEIN}&q=her")[1])["rows"], ["HER2"])
+        values = {v["value"] for v in json.loads(self.get(base + f"/api/options?column={ER}")[1])["values"]}
+        self.assertTrue({"Positive", "Negative"} <= values)
+        status, made = self.post(base + "/api/question", {"type": "mean_by_group", "title": "HER2 by ER status", "file": PROTEIN,
+                                                          "row": "HER2", "column": ER, "groups": ["Positive", "Negative"]})
+        self.assertEqual((status, made["id"]), (200, "Q1"))
+        doc = json.loads(self.get(base + "/api/findings?for=A1,Q1")[1])
+        self.assertEqual(doc["x_readyset"]["analyses_in_question"], ["A1", "Q1"])
+        self.assertIn("Q1", [a["id"] for a in doc["x_readyset"]["live"]["available"]])
+        self.assertEqual(next(a for a in doc["analyses"] if a["id"] == "Q1")["status"], "changed")   # the swap moves it too
+        status, made = self.post(base + "/api/question", {"type": "category_mix", "column": HISTOLOGY})
+        self.assertEqual((status, made["id"]), (200, "Q2"))
+        status, body = self.post(base + "/api/question", {"type": "mean_by_group", "file": PROTEIN, "row": "NOPE", "column": ER,
+                                                          "groups": ["Positive"]})
+        self.assertEqual(status, 400)
+        self.assertIn("no row called NOPE", body["detail"])
+
     def test_health(self):
         status, body, _ = self.get(self.start() + "/api/health")
         self.assertEqual((status, json.loads(body)["status"]), (200, "ok"))

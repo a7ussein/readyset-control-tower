@@ -55,6 +55,9 @@ def compare(folder_a, folder_b, analyses=None):
     notes = []
     if os.path.realpath(folder_a) == os.path.realpath(folder_b):
         notes.append("Both releases are the same folder, so there was nothing to compare.")
+    elif os.path.isfile(os.path.join(folder_a, "CHANGES.json")) and not os.path.isfile(os.path.join(folder_b, "CHANGES.json")):
+        notes.append(f"{rel_a} holds a CHANGES.json, which the organisers' script writes into a release it has altered. "
+                     f"The two folders may be the wrong way round: the trusted release goes first.")
     rel_a, rel_b = _names(folder_a, folder_b)
     raw, files_info, hashes = [], [], {rel_a: [], rel_b: []}
     insufficient = False
@@ -165,6 +168,7 @@ def compare(folder_a, folder_b, analyses=None):
             if r:
                 repairs.append({"id": f"R{len(repairs) + 1}", "action": r["action"], "targets": r["targets"],
                                 "justification": r["justification"], "addresses": [fid]})
+    effects, priority = _effects(raw, findings, repairs, chosen, folder_a, folder_b)
     witness = _witness(raw, folder_a, folder_b, rel_a, rel_b, chosen)
     rules = {}
     for f, raw_f in zip(findings, raw):
@@ -213,10 +217,86 @@ def compare(folder_a, folder_b, analyses=None):
             "unrelated_findings": sum(1 for f in findings if not f["affects_analyses"]),
             "notes": notes,
             "rules": rules,
+            "effects": effects,
+            "repair_priority": priority,
             "files": files_info,
             "witness": witness,
             "scope": SCOPE},
     }
+
+
+SMALL = 0.005        # a result that moved, but by less than half a percent in every number, moved only slightly
+
+
+def _flat(result):
+    out = {}
+    for k, v in (result or {}).items():
+        if isinstance(v, dict):
+            out.update({f"{k}: {k2}": v2 for k2, v2 in v.items()})
+        else:
+            out[k] = v
+    return out
+
+
+def _size(before, after):
+    """('none' | 'small' | 'large', the measure that moved most, by how much as a fraction)."""
+    b, a = _flat(before), _flat(after)
+    if b == a:
+        return "none", None, 0.0
+    worst, most = None, 0.0
+    for k in set(b) | set(a):
+        x, y = b.get(k), a.get(k)
+        if x == y:
+            continue
+        if isinstance(x, (int, float)) and isinstance(y, (int, float)) and x:
+            rel = abs(y - x) / abs(x)
+        else:
+            rel = 1.0                                    # a number appeared, vanished, or moved off zero
+        if rel > most:
+            worst, most = k, rel
+    return ("small" if most < SMALL else "large"), worst, round(most, 5)
+
+
+def _effects(raw, findings, repairs, chosen, folder_a, folder_b):
+    """What each finding does to each analysis on its own: the analysis recomputed on the trusted release with only
+    that finding's changes applied. Also how urgently each suggested fix is needed, sized by that effect."""
+    inputs = {}
+    for a in chosen:
+        try:
+            inputs[a.id] = (a.inputs(folder_a), a.inputs(folder_b))
+        except (CannotRun, release.Unreadable, OSError, EOFError, UnicodeDecodeError):
+            inputs[a.id] = None
+    wrap = lambda v: v if isinstance(v, tuple) else (v,)
+    effects = {}
+    for f, raw_f in zip(findings, raw):
+        for a in chosen:
+            if a.id not in raw_f["affects"] or not inputs[a.id]:
+                continue
+            before_in, after_in = inputs[a.id]
+            try:
+                before = _clean(a.compute(*wrap(before_in)))
+                alone = _clean(a.compute(*wrap(a.with_only(before_in, after_in, raw_f["changes"]))))
+            except (CannotRun, ValueError, KeyError, TypeError):
+                continue
+            size, measure, by = _size(before, alone)
+            effects.setdefault(f["id"], {})[a.id] = {"before": before, "after": alone, "size": size,
+                                                     "measure": measure, "moved_by": by}
+    priority = {}
+    for r in repairs:
+        fid = r["addresses"][0]
+        f = next(x for x in findings if x["id"] == fid)
+        sizes = [e["size"] for e in effects.get(fid, {}).values()]
+        if not f["affects_analyses"]:
+            priority[r["id"]] = {"level": "for the record", "why": "Nothing in the question reads what this finding touches."}
+        elif "large" in sizes or (not sizes and f["severity"] == "high"):
+            priority[r["id"]] = {"level": "before use", "why": "On its own this finding moves a result you rely on."}
+        elif "small" in sizes:
+            priority[r["id"]] = {"level": "small effect", "why": "On its own this finding moves a result by less than half a "
+                                 "percent. Fix it, or accept it and say so in your methods."}
+        else:
+            priority[r["id"]] = {"level": "no effect on the result", "why": "It touches samples a result reads, but on its own "
+                                 "the result is the same. Fix it when convenient."}
+    return effects, priority
 
 
 def _witness(raw, folder_a, folder_b, rel_a, rel_b, chosen):
