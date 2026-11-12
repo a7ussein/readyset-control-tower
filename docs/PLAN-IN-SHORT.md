@@ -48,7 +48,7 @@ need nothing that isn't in that file. If it does, tell Ahmed and the file gets a
 1. **The verdict rule.** Ready = nothing changed. Conditional = things changed, we reran what was affected, a person
    reviews. Blocked = an affected result can't be rerun. Insufficient Evidence = a file is missing. Agree or change.
 2. **Severity.** High = a result moved. Medium = a result's samples were touched but the number held. Low = no result
-   touched. Agree or change.
+   touched. Agree or change. Exception, agreed after kickoff (the checker compares severity): a membership change is never above medium, as in the organisers' reference output.
 3. **A copied sample is reported twice**, as a duplicate and as a membership change. Fine, or one finding?
 4. **The interface.** Carry over the ReadySet page and design for James to re-point, or start fresh?
 
