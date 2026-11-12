@@ -12,10 +12,8 @@ import unittest
 from tests.tiny_release import (A1_BEFORE, A2_BEFORE, CLIN_ONLY, CLINICAL, COPY_NUMBER, ER, HISTOLOGY, MET, MUTATION, N1, N2,
                                 NEW1, NEW2, NORMAL, P1, P2, P3, PAM50, PROTEIN, RNA, SURVIVAL, U1, TinyRelease)
 
-try:
-    from control_tower import compare
-except ImportError:                     # the engine is not written yet
-    compare = None
+from control_tower import compare
+from control_tower.compare import _severity
 
 
 def samples(finding):
@@ -40,7 +38,7 @@ class Detectors(unittest.TestCase):
         for_a2 = self.run_pair(swap, ["A2"])
         f = self.only("sample_swap")                                           # still reported, never hidden
         self.assertEqual((for_a2["verdict"], f["severity"], f["affects_analyses"], f["not_affected_analyses"]),
-                         ("Ready", "low", [], ["A2"]))
+                         ("Ready", "high", [], ["A2"]))                     # as serious as before; it just does not reach A2
         self.assertEqual([(a["id"], a["status"]) for a in for_a2["analyses"]], [("A2", "not_rerun")])
         self.assertEqual(for_a2["x_readyset"]["unrelated_findings"], 1)
         self.assertIn("A2", for_a2["question"])
@@ -136,6 +134,21 @@ class Detectors(unittest.TestCase):
         with self.assertRaises(BadQuestion):
             self.run_pair(lambda b: b, [{"id": "Q1", "type": "category_mix", "column": "no_such_column"}])
 
+    def test_severity_goes_by_the_kind_of_problem_and_never_by_the_question(self):
+        self.assertEqual([_severity(k, False) for k in ("sample_swap", "duplicate", "membership_change", "label_conflict", "other")],
+                         ["high", "high", "medium", "medium", "medium"])
+        self.assertEqual([_severity(k, True) for k in ("label_conflict", "missing_data", "other", "membership_change")],
+                         ["high", "high", "high", "medium"])
+        for file in (COPY_NUMBER, MUTATION):                                      # a swap nobody reads is still a swap
+            self.run_pair(lambda b: b.swap(file, P1, N1))
+            self.assertEqual((self.only("sample_swap")["severity"], self.doc["verdict"]), ("high", "Ready"))
+        relabel = lambda b: b.relabel(ER, P1, "Negative")
+        both = self.run_pair(relabel)["findings"][0]["severity"]
+        only_a2 = self.run_pair(relabel, ["A2"])["findings"][0]["severity"]
+        self.assertEqual((both, only_a2), ("high", "high"))                       # the same finding, whatever is asked
+        unread = self.run_pair(lambda b: b.relabel(HISTOLOGY, P1, "Other"))
+        self.assertEqual(unread["findings"][0]["severity"], "medium")
+
     def test_every_finding_says_which_rule_found_it_and_why_it_matters(self):
         doc = self.run_pair(lambda b: b.swap(PROTEIN, P1, N1))
         rule = doc["x_readyset"]["rules"][self.only("sample_swap")["id"]]
@@ -203,7 +216,7 @@ class Detectors(unittest.TestCase):
     def test_a_swap_inside_one_er_group_reruns_a1_and_finds_it_unchanged(self):
         self.run_pair(lambda b: b.swap(PROTEIN, P1, P2))
         f = self.only("sample_swap")
-        self.assertEqual((f["affects_analyses"], f["severity"]), (["A1"], "medium"))
+        self.assertEqual((f["affects_analyses"], f["severity"]), (["A1"], "high"))      # a swap is high even when the result holds
         a1 = self.analysis("A1")
         self.assertEqual(a1["status"], "unchanged")
         self.assertEqual(a1["before"], a1["after"])
@@ -211,7 +224,8 @@ class Detectors(unittest.TestCase):
     def test_a_swap_in_a_file_no_analysis_reads_affects_neither(self):
         self.run_pair(lambda b: b.swap(COPY_NUMBER, P1, N1))
         f = self.only("sample_swap")
-        self.assertEqual((f["affects_analyses"], f["not_affected_analyses"], f["severity"]), ([], ["A1", "A2"], "low"))
+        self.assertEqual((f["affects_analyses"], f["not_affected_analyses"]), ([], ["A1", "A2"]))
+        self.assertEqual(f["severity"], _severity(f["kind"], False))
         self.assertEqual([a["status"] for a in self.doc["analyses"]], ["not_rerun", "not_rerun"])
         self.assertFalse(self.files()[RNA]["opened"])
 
@@ -309,7 +323,8 @@ class Detectors(unittest.TestCase):
     def test_a_column_neither_analysis_reads_affects_neither(self):
         self.run_pair(lambda b: b.relabel(HISTOLOGY, P1, "Lobular"))
         f = self.only("label_conflict")
-        self.assertEqual((f["affects_analyses"], f["not_affected_analyses"], f["severity"]), ([], ["A1", "A2"], "low"))
+        self.assertEqual((f["affects_analyses"], f["not_affected_analyses"]), ([], ["A1", "A2"]))
+        self.assertEqual(f["severity"], _severity(f["kind"], False))
 
     def test_er_status_relabelled_for_a_sample_with_no_protein_data_does_not_affect_a1(self):
         self.run_pair(lambda b: b.relabel(ER, NORMAL, "Negative"))             # the normal is not in the protein file

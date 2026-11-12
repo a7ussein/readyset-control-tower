@@ -55,7 +55,8 @@ class Server(unittest.TestCase):
         self.assertEqual((both["verdict"], both["x_readyset"]["analyses_in_question"]), ("Conditional", ["A1", "A2"]))
         self.assertEqual([a["id"] for a in both["x_readyset"]["live"]["available"]], ["A1", "A2"])
         only_a2 = json.loads(self.get(base + "/api/findings?for=A2")[1])
-        self.assertEqual((only_a2["verdict"], only_a2["findings"][0]["severity"]), ("Ready", "low"))
+        self.assertEqual((only_a2["verdict"], only_a2["findings"][0]["severity"], only_a2["findings"][0]["affects_analyses"]),
+                         ("Ready", "high", []))
         self.assertEqual(self.get(base + "/api/findings?for=A9")[0], 400)
 
     def test_live_mode_offers_an_analysis_described_in_a_question_file(self):
@@ -186,6 +187,22 @@ class Server(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("no row called NOPE", json.loads(body)["detail"])
         self.assertEqual(self.get(base + "/api/findings?for=A1")[0], 200)          # the registered ones still work
+
+    def test_a_release_zipped_the_way_a_mac_does_it_loads_cleanly(self):
+        import zipfile
+        base, d, new = self.waiting()
+        zip_path = os.path.join(d, "handed-over.zip")
+        with zipfile.ZipFile(zip_path, "w") as z:
+            for f in os.listdir(new):
+                z.write(os.path.join(new, f), os.path.join("hidden-release", f))
+                z.writestr(os.path.join("__MACOSX", "hidden-release", "._" + f), "resource fork")
+            z.writestr("hidden-release/CHANGES.json", "{}")                       # the answer key travels with the release
+            z.writestr("hidden-release/.DS_Store", "junk")
+        status, state = self.post(base + "/api/release", {"path": zip_path})
+        self.assertEqual((status, state["new_name"]), (200, "handed-over"))
+        doc = json.loads(self.get(base + "/api/findings")[1])
+        self.assertEqual([f["kind"] for f in doc["findings"]], ["sample_swap"])
+        self.assertEqual(doc["x_readyset"]["notes"], [])
 
     def test_something_that_is_not_a_release_is_refused_in_plain_words(self):
         base, d, _ = self.waiting()

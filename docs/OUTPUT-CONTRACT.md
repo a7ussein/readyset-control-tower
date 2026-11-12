@@ -40,7 +40,7 @@ Each finding is one thing that changed, of one kind.
 | `id` | `F1`, `F2`, … in the order found. Stable within a file. |
 | `kind` | `sample_swap` · `duplicate` · `membership_change` · `label_conflict` · `missing_data` · `other`. Nothing else. |
 | `summary` | One plain sentence a judge can read aloud. |
-| `severity` | `high` if it changes a registered analysis's result. `medium` if it touches samples an analysis reads but the result is the same. `low` if it touches no registered analysis. One exception, to match the organisers' reference output: a `membership_change` is never above `medium`, because it is lost coverage, not corrupted values. |
+| `severity` | How serious the data problem is, by its kind, whatever the question: `high` for a swap or a copy (samples carry someone else's data); `medium` for samples that left or joined; for relabels, missing values and other edits, `high` where a registered analysis reads them and `medium` otherwise. This follows the organisers' reference output, which rates a swap and a copy `high` and lost samples `medium` although all three moved the same result. How far a finding reaches into the question's analyses is separate: `affects_analyses`, and `effects` and `repair_priority` under `x_readyset`. |
 | `confidence` | `high` when the pattern is exact (a profile matches another id's profile, a cell's text differs). `low` for the catch-all `other`. `medium` is reserved for partial matches. |
 | `evidence` | At least one pointer. Each has `kind` and `id`, plus `release`, `file` and a `note` saying what was seen there. |
 | `affects_analyses` / `not_affected_analyses` | Between them they name **every** registered analysis, each exactly once. Both are always present, even when one is empty. |

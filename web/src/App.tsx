@@ -658,7 +658,7 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
         <p className="ask-line">Can I use <code>{newName}</code> for my analyses?</p>
         <h1 role="status"><span className="mark" aria-hidden="true">{tone.mark}</span>{(HEADLINE[verdict] ?? (() => verdict || 'No verdict'))(touching, doc.findings.length)}</h1>
         <p className="means">{verdict === 'Ready' && doc.findings.length > 0
-          ? `Nothing these analyses read has changed. ${plural(doc.findings.length, 'change')} elsewhere in the release ${doc.findings.length === 1 ? 'is' : 'are'} listed below for the record.`
+          ? `Nothing these analyses read has changed. ${plural(doc.findings.length, 'change')} elsewhere in the release ${doc.findings.length === 1 ? 'is' : 'are'} listed below: real problems in the data, but not for these analyses.`
           : tone.means}</p>
         <p className="facts">
           <span className="verdict-chip">Verdict: {verdict || 'none'}</span>

@@ -359,7 +359,7 @@
   ],
   "x_readyset": {
     "engine_version": "0.1.0",
-    "generated_at": "2026-11-12T02:31:10+00:00",
+    "generated_at": "2026-11-12T02:40:49+00:00",
     "run_seconds": 0.83,
     "analyses_registered": [
       "A1",
@@ -386,7 +386,7 @@
           "A1 is touched: it reads the ERALPHA row of protein_rppa.tsv.gz and the breast_carcinoma_estrogen_receptor_status column of clinical.tsv, for primary tumours whose value there is Positive or Negative.",
           "A2 is not touched: it reads the PAM50Call_RNAseq column of clinical.tsv, for primary tumours that have a value there."
         ],
-        "severity": "High: a protected analysis was rerun and its result changed."
+        "severity": "High: samples carry another sample's data. A swap is rated high wherever it is, because anything computed from those samples is wrong."
       },
       "F2": {
         "detected_by": "A sample id in the new release has a fingerprint identical to a different sample's, and the two were not identical in the trusted release. An id that already existed counts as a copy only if at least half of its informative cells changed.",
@@ -394,7 +394,7 @@
           "A1 is touched: it reads the ERALPHA row of protein_rppa.tsv.gz and the breast_carcinoma_estrogen_receptor_status column of clinical.tsv, for primary tumours whose value there is Positive or Negative.",
           "A2 is not touched: it reads the PAM50Call_RNAseq column of clinical.tsv, for primary tumours that have a value there."
         ],
-        "severity": "High: a protected analysis was rerun and its result changed."
+        "severity": "High: a sample id carries a copy of another sample's data, so one sample is counted twice."
       },
       "F3": {
         "detected_by": "The set of sample ids in the file differs between the two releases. Ids that arrived as copies of another sample are reported separately as duplicates.",
@@ -402,7 +402,7 @@
           "A1 is touched: it reads the ERALPHA row of protein_rppa.tsv.gz and the breast_carcinoma_estrogen_receptor_status column of clinical.tsv, for primary tumours whose value there is Positive or Negative.",
           "A2 is not touched: it reads the PAM50Call_RNAseq column of clinical.tsv, for primary tumours that have a value there."
         ],
-        "severity": "Medium: it touches samples a protected analysis reads, but the result held, or it is lost coverage, which is never rated above medium."
+        "severity": "Medium: samples left or joined. Coverage changed, but the values that remain are intact."
       }
     },
     "effects": {

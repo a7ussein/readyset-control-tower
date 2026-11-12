@@ -34,7 +34,7 @@ need nothing that isn't in that file. If it does, tell Ahmed and the file gets a
 ## What exists today
 - The output contract and the example file.
 - The engine plan, with seven detectors described in one sentence each.
-- 69 tests, 43 of which say exactly what the engine must report for each kind of change. They
+- 71 tests, 44 of which say exactly what the engine must report for each kind of change. They
   run on a tiny invented dataset of eight samples, so anyone can check an expected answer by eye.
 - **A first working engine** (Ahmed got ahead of the Thursday start). It passes all the tests, gives the organisers'
   own A1 numbers on release A, and on a changed copy of the real data found exactly what was planted in under six
@@ -47,8 +47,9 @@ need nothing that isn't in that file. If it does, tell Ahmed and the file gets a
 ## Decisions we need from the team
 1. **The verdict rule.** Ready = nothing changed. Conditional = things changed, we reran what was affected, a person
    reviews. Blocked = an affected result can't be rerun. Insufficient Evidence = a file is missing. Agree or change.
-2. **Severity.** High = a result moved. Medium = a result's samples were touched but the number held. Low = no result
-   touched. Agree or change. Exception, agreed after kickoff (the checker compares severity): a membership change is never above medium, as in the organisers' reference output.
+2. **Severity** goes by the kind of problem, not by the question: a swap or a copy is high, lost or added samples
+   are medium, and other edits are high where a registered analysis reads them, medium otherwise. Changed after
+   kickoff and two independent reviews, to follow the organisers' reference output.
 3. **A copied sample is reported twice**, as a duplicate and as a membership change. Fine, or one finding?
 4. **The interface.** Carry over the ReadySet page and design for James to re-point, or start fresh?
 
@@ -63,7 +64,7 @@ Already answered (relayed by Ahmed, 10 Nov):
 - Ordi's OncoSys internship does not affect eligibility.
 
 ## Who does what
-- **Ahmed:** the engine. Built and merged; 69 tests pass. Next: whatever kickoff changes.
+- **Ahmed:** the engine. Built and merged; 71 tests pass. Next: whatever kickoff changes.
 - **James:** the one screen and the fresh-clone setup. Builds against the example file first.
 - **Ordi:** the test releases, the scorecard, the demo and the pitch.
 

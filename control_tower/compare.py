@@ -116,6 +116,14 @@ def compare(folder_a, folder_b, analyses=None):
     for f in raw:
         f["affects"] = [a.id for a in chosen
                         if any(a.touched_by(ch, used[a.id], in_file[a.id]) for ch in f["changes"])]
+    # Severity must not depend on which analyses the question names, so "is read by an analysis" is asked of every
+    # registered analysis as well as the ones in the question.
+    others = [a for a in REGISTRY if a not in chosen]
+    used_o = {a.id: a.used(folder_a) | a.used(folder_b) for a in others}
+    in_file_o = {a.id: a.file_samples(folder_a) | a.file_samples(folder_b) for a in others}
+    for f in raw:
+        f["read_by_any"] = bool(f["affects"]) or any(
+            a.touched_by(ch, used_o[a.id], in_file_o[a.id]) for a in others for ch in f["changes"])
 
     # Rerun only the analyses a finding touches.
     analyses, status_of, blocked = [], {}, False
@@ -155,9 +163,7 @@ def compare(folder_a, folder_b, analyses=None):
     for i, f in enumerate(raw, 1):
         fid = f"F{i}"
         moved = [a for a in f["affects"] if status_of[a] in ("changed", "blocked")]
-        severity = "high" if moved else ("medium" if f["affects"] else "low")
-        if f["kind"] == "membership_change" and severity == "high":
-            severity = "medium"                 # as in the organisers' reference output: lost coverage, not corrupted values
+        severity = _severity(f["kind"], f["read_by_any"])
         findings.append({
             "id": fid, "kind": f["kind"], "summary": f["summary"], "severity": severity,
             "confidence": f["confidence"], "evidence": f["evidence"],
@@ -174,10 +180,8 @@ def compare(folder_a, folder_b, analyses=None):
     for f, raw_f in zip(findings, raw):
         reads = [f"{a.id} {'is touched' if a.id in raw_f['affects'] else 'is not touched'}: it reads {a.reads()}."
                  for a in chosen]
-        why = {"high": "High: a protected analysis was rerun and its result changed.",
-               "medium": "Medium: it touches samples a protected analysis reads, but the result held, or it is lost "
-                         "coverage, which is never rated above medium.",
-               "low": "Low: it touches nothing a protected analysis reads."}[f["severity"]]
+        why = SEVERITY_WHY[(f["kind"] if f["kind"] in ("sample_swap", "duplicate", "membership_change") else "other",
+                            f["severity"])]
         rules[f["id"]] = {"detected_by": DETECTED_BY.get(f["kind"], DETECTED_BY["other"]), "impact": reads, "severity": why}
     for entry in analyses:
         because = entry.pop("_because", None)
@@ -224,6 +228,28 @@ def compare(folder_a, folder_b, analyses=None):
             "scope": SCOPE},
     }
 
+
+def _severity(kind, read_by_any):
+    """How serious the data problem is, by what kind of problem it is. It does not change with the question: how far
+    a finding reaches into your analyses is reported separately (affects_analyses, effects, repair_priority).
+
+    This follows the organisers' reference output, which rates a swap and a copy high and lost samples medium even
+    though all three moved the same result."""
+    if kind in ("sample_swap", "duplicate"):
+        return "high"                           # samples carry someone else's data
+    if kind == "membership_change":
+        return "medium"                         # coverage lost or gained; the values that remain are intact
+    return "high" if read_by_any else "medium"  # labels, missing values, other edits: high where an analysis reads them
+
+
+SEVERITY_WHY = {
+    ("sample_swap", "high"): "High: samples carry another sample's data. A swap is rated high wherever it is, because "
+                             "anything computed from those samples is wrong.",
+    ("duplicate", "high"): "High: a sample id carries a copy of another sample's data, so one sample is counted twice.",
+    ("membership_change", "medium"): "Medium: samples left or joined. Coverage changed, but the values that remain are intact.",
+    ("other", "high"): "High: the changed values are ones a registered analysis reads.",
+    ("other", "medium"): "Medium: values changed, but no registered analysis reads them.",
+}
 
 SMALL = 0.005        # below half a percent on every headline number, a result moved only slightly
 
