@@ -12,6 +12,11 @@ from control_tower.webserver import EXAMPLE, make_server
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
+def TinyReleaseAt(folder, name, change):
+    from tests.tiny_release import TinyRelease
+    return change(TinyRelease()).write(os.path.join(folder, name))
+
+
 class Server(unittest.TestCase):
     def start(self, findings=None, **more):
         httpd = make_server("127.0.0.1", 0, findings, quiet=True, **more)
@@ -77,9 +82,18 @@ class Server(unittest.TestCase):
         reviewed = json.loads(self.get(base + "/api/findings")[1])
         self.assertEqual(reviewed["findings"][0]["needs_human_review"], False)     # any tool reading the format sees it
         repair = next(r["id"] for r in reviewed["repairs"] if "F1" in r["addresses"])
+        self.assertNotIn("decisions", reviewed)                 # confirming a problem does not approve the suggested fix
+        self.post(base + "/api/reviews", {"key": key, "status": "confirmed", "fix": "approved", "reviewer": "R. Engineer",
+                                          "role": "research engineer", "note": "checked the two files"})
+        reviewed = json.loads(self.get(base + "/api/findings")[1])
         decision = next(d for d in reviewed["decisions"] if d["repair_id"] == repair)
         self.assertEqual((decision["decision"], decision["reviewer_role"]), ("approve", "research engineer"))
         self.assertIn("R. Engineer", decision["reason"])
+        self.post(base + "/api/reviews", {"key": key, "status": "dismissed", "reviewer": "R. Engineer", "role": "research engineer"})
+        dismissed = json.loads(self.get(base + "/api/findings")[1])
+        self.assertEqual(next(d for d in dismissed["decisions"] if d["repair_id"] == repair)["decision"], "reject")
+        self.post(base + "/api/reviews", {"key": key, "status": "confirmed", "reviewer": "R. Engineer",
+                                          "role": "research engineer", "note": "checked the two files"})
         self.assertEqual(reviewed["x_readyset"]["reviews"][0]["release"], "B")
         self.assertTrue(key.startswith("B|"))                                      # a review belongs to one release
         for query in ("", "?for=A2"):                                             # same finding, different question
@@ -134,6 +148,44 @@ class Server(unittest.TestCase):
         status, state = self.post(base + "/api/release", {"batch": "batch-files-0002", "name": "hidden-release"})
         self.assertEqual((status, state["new_name"]), (200, "hidden-release"))
         self.assertEqual(json.loads(self.get(base + "/api/findings")[1])["findings"][0]["kind"], "sample_swap")
+
+    def test_two_releases_in_one_zip_are_refused_never_merged(self):
+        import zipfile
+        from tests.tiny_release import N2, P2, PROTEIN
+        base, d, new = self.waiting()
+        other = TinyReleaseAt(d, "other-release", lambda r: r.swap(PROTEIN, P2, N2))
+        zip_path = os.path.join(d, "two.zip")
+        with zipfile.ZipFile(zip_path, "w") as z:
+            for folder in (new, other):
+                for f in os.listdir(folder):
+                    z.write(os.path.join(folder, f), os.path.join(os.path.basename(folder), f))
+        status, body = self.post(base + "/api/release", {"path": zip_path})
+        self.assertEqual(status, 400)
+        self.assertIn("more than one release", body["detail"])
+        self.assertNotIn(tempfile.gettempdir(), body["detail"])                   # no internal folders in the message
+        both = os.path.join(d, "both")
+        os.makedirs(both)
+        for folder in (new, other):
+            os.symlink(folder, os.path.join(both, os.path.basename(folder)))
+        status, body = self.post(base + "/api/release", {"path": both})
+        self.assertEqual(status, 400)
+        self.assertIn("more than one release", body["detail"])
+        self.assertEqual(json.loads(self.get(base + "/api/state")[1])["new"], None)   # nothing was loaded
+
+    def test_the_trusted_release_cannot_be_given_as_the_new_one(self):
+        base, d, _ = self.waiting()
+        status, body = self.post(base + "/api/release", {"path": os.path.join(d, "trusted")})
+        self.assertEqual(status, 400)
+        self.assertIn("trusted release itself", body["detail"])
+
+    def test_a_question_that_does_not_fit_is_answered_in_words_on_the_page_too(self):
+        from tests.tiny_release import ER, PROTEIN
+        bad = [{"id": "Q1", "type": "mean_by_group", "file": PROTEIN, "row": "NOPE", "column": ER, "groups": ["Positive", "Negative"]}]
+        base, _ = self.live(question=bad)
+        status, body, _ = self.get(base + "/api/findings")
+        self.assertEqual(status, 400)
+        self.assertIn("no row called NOPE", json.loads(body)["detail"])
+        self.assertEqual(self.get(base + "/api/findings?for=A1")[0], 200)          # the registered ones still work
 
     def test_something_that_is_not_a_release_is_refused_in_plain_words(self):
         base, d, _ = self.waiting()

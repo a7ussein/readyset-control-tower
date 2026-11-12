@@ -88,6 +88,8 @@ def cmd_compare(args):
         print(f"  {f['id']:4} {f['kind']:18} {f['severity']:6} affects {hit}: {f['summary']}")
     for a in doc["analyses"]:
         print(f"  {a['id']:4} {a['status']}")
+    for note in x.get("notes", []):
+        print(f"  note: {note}")
     print(f"wrote {out}")
     if report:
         from .report import render
@@ -104,6 +106,9 @@ def main(argv=None):
     if argv[:1] == ["serve"]:
         from .webserver import main as serve
         return serve(argv[1:])
+    if argv[:1] in (["--help"], ["-h"], ["help"]):
+        print(__doc__)
+        return 0
     print(__doc__, file=sys.stderr)
     return 64
 

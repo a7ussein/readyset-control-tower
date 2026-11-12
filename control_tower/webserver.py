@@ -72,8 +72,12 @@ class Handler(BaseHTTPRequestHandler):
             key = ",".join(ids)
             with srv.lock:
                 if key not in srv.cache:
+                    from .analyses import BadQuestion
                     from .compare import compare
-                    srv.cache[key] = compare(srv.releases[0], srv.releases[1], [srv.available[i] for i in ids])
+                    try:
+                        srv.cache[key] = compare(srv.releases[0], srv.releases[1], [srv.available[i] for i in ids])
+                    except BadQuestion as e:
+                        return 400, {"detail": str(e)}
                 doc = json.loads(json.dumps(srv.cache[key]))
             x = doc.setdefault("x_readyset", {})
             x["live"] = {"available": [{"id": i, "title": x.get("analysis_titles", {}).get(i) or srv.titles.get(i, i)}
@@ -128,7 +132,8 @@ class Handler(BaseHTTPRequestHandler):
             if status == "cleared":
                 saved.pop(key, None)
             else:
-                saved[key] = {"key": key, "status": status, "reviewer": clean(body.get("reviewer")),
+                saved[key] = {"key": key, "status": status, "fix": "approved" if body.get("fix") == "approved" and status == "confirmed" else "",
+                              "reviewer": clean(body.get("reviewer")),
                               "role": clean(body.get("role")), "note": clean(body.get("note")),
                               "at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
             self.server.save_reviews(saved)
@@ -159,6 +164,10 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(413, {"detail": f"{name} is too large"})
         folder = os.path.join(self.server.staging, batch)
         os.makedirs(folder, exist_ok=True)
+        if os.path.exists(os.path.join(folder, name if name in FILES else "upload.zip")):
+            self.rfile.read(length)
+            return self._json(400, {"detail": f"there are two files called {name} in what you dropped. That looks like more than one "
+                                              f"release. Give it one release at a time, so they are not mixed together."})
         with open(os.path.join(folder, name if name in FILES else "upload.zip"), "wb") as out:
             left = length
             while left > 0:
@@ -198,6 +207,12 @@ class Handler(BaseHTTPRequestHandler):
                 if os.path.isfile(os.path.join(staged, "upload.zip")):
                     unzip_release(os.path.join(staged, "upload.zip"), target)
                 new = release_folder(target, srv.staging)
+            if trusted and new and os.path.realpath(trusted) == os.path.realpath(new):
+                raise NotARelease("that is the trusted release itself. Give it the new release you want to check.")
+            if trusted and srv.question_specs:
+                problems = question_problems(srv.question_specs, trusted)
+                if problems:
+                    raise NotARelease("the question file does not fit the trusted release. " + "; ".join(problems))
         except NotARelease as e:
             return self._json(400, {"detail": str(e)})
         with srv.lock:
@@ -271,11 +286,16 @@ def unzip_release(zip_path, target):
     """Take only the release's own files out of a zip, by name, wherever they sit inside it. Nothing else is written."""
     try:
         with zipfile.ZipFile(zip_path) as z:
-            for info in z.infolist():
-                name = os.path.basename(info.filename)
-                if info.is_dir() or name not in FILES or info.file_size > MAX_UPLOAD:
-                    continue
-                with z.open(info) as src, open(os.path.join(target, name), "wb") as out:
+            wanted = [i for i in z.infolist() if not i.is_dir() and os.path.basename(i.filename) in FILES
+                      and not os.path.basename(i.filename).startswith("._") and "__MACOSX" not in i.filename]
+            folders = sorted({os.path.dirname(i.filename) or "(top level)" for i in wanted})
+            if len(folders) > 1:
+                raise NotARelease("that zip holds more than one release (" + ", ".join(os.path.basename(f) or f for f in folders[:4])
+                                  + "). Give it one release at a time, so they are not mixed together.")
+            for info in wanted:
+                if info.file_size > MAX_UPLOAD:
+                    raise NotARelease(f"{os.path.basename(info.filename)} in that zip is too large")
+                with z.open(info) as src, open(os.path.join(target, os.path.basename(info.filename)), "wb") as out:
                     shutil.copyfileobj(src, out)
     except (zipfile.BadZipFile, OSError) as e:
         raise NotARelease(f"that zip could not be opened: {e}")
@@ -284,19 +304,23 @@ def unzip_release(zip_path, target):
 def release_folder(path, staging):
     """The folder that holds a release's files, given a folder or a zip. Looks one level down for a lone subfolder."""
     path = os.path.abspath(os.path.expanduser(path.strip().strip('"').strip("'")))
+    shown = "what you gave" if path.startswith(os.path.abspath(staging)) else path
     if os.path.isfile(path) and path.lower().endswith(".zip"):
         target = os.path.join(staging, uuid.uuid4().hex, os.path.splitext(os.path.basename(path))[0] or "new-release")
         os.makedirs(target, exist_ok=True)
         unzip_release(path, target)
         path = target
     if not os.path.isdir(path):
-        raise NotARelease(f"{path} is not a folder or a zip")
+        raise NotARelease(f"{shown} is not a folder or a zip")
     has = lambda folder: any(os.path.isfile(os.path.join(folder, f)) for f in FILES)
     if not has(path):
         inner = [os.path.join(path, d) for d in sorted(os.listdir(path)) if os.path.isdir(os.path.join(path, d))]
         found = [d for d in inner if has(d)]
-        if len(found) != 1:
-            raise NotARelease(f"none of the release's files are in {path} (looking for {', '.join(FILES[:2])}, ...)")
+        if len(found) > 1:
+            raise NotARelease(f"{shown} holds more than one release ({', '.join(os.path.basename(d) for d in found[:4])}). "
+                              f"Give it one release at a time.")
+        if not found:
+            raise NotARelease(f"none of the release's files are in {shown} (looking for {', '.join(FILES[:2])} and the others)")
         path = found[0]
     return path
 
@@ -342,14 +366,25 @@ def apply_reviews(doc, reviewed):
         f["needs_human_review"] = False
         who = r.get("reviewer") or "a reviewer who gave no name"
         said = "Confirmed as a real problem" if r["status"] == "confirmed" else "Dismissed as an expected change"
+        if r["status"] == "confirmed" and r.get("fix") == "approved":
+            said += ", and the suggested fix approved,"
         reason = f"{said} by {who}" + (f": {r['note']}" if r.get("note") else ".")
+        # Confirming that a problem is real does not approve the suggested fix. A decision on the fix is written only
+        # when the reviewer approved it too, or dismissed the finding (so the fix is not wanted).
+        verdict = "reject" if r["status"] == "dismissed" else ("approve" if r.get("fix") == "approved" else None)
         for repair in doc.get("repairs", []) if isinstance(doc.get("repairs"), list) else []:
-            if isinstance(repair, dict) and f["id"] in (repair.get("addresses") or []) and repair.get("id"):
+            if verdict and isinstance(repair, dict) and f["id"] in (repair.get("addresses") or []) and repair.get("id"):
                 decisions = [d for d in decisions if d.get("repair_id") != repair["id"]]
-                decisions.append({"repair_id": repair["id"], "decision": "approve" if r["status"] == "confirmed" else "reject",
+                decisions.append({"repair_id": repair["id"], "decision": verdict,
                                   "reason": reason, "reviewer_role": r.get("role") or "not stated", "original_preserved": True})
     if decisions:
         doc["decisions"] = decisions
+
+
+def question_problems(specs, trusted):
+    """Why each described analysis cannot be asked of the trusted release; empty when the question fits."""
+    from .analyses import REGISTRY, from_spec
+    return [w for w in (a.problem(trusted) for a in (from_spec(q) for q in specs) if a not in REGISTRY) if w]
 
 
 def review_key(finding, new_release=""):
@@ -399,6 +434,7 @@ def make_server(host="127.0.0.1", port=8010, findings=None, quiet=False, release
     httpd.available = {a.id: a.id for a in REGISTRY}
     httpd.titles = {a.id: a.title for a in REGISTRY}
     httpd.default_ids = list(httpd.available)
+    httpd.question_specs = question
     if question:
         asked = [from_spec(q) for q in question]              # raises BadQuestion before the server starts
         for spec, a in zip(question, asked):
@@ -430,6 +466,12 @@ def main(argv):
                 open_browser = False
             elif not a.startswith("--") and os.path.isdir(a):
                 folders.append(a)
+            elif a in ("--help", "-h"):
+                print(__doc__)
+                return 0
+            elif not a.startswith("--"):
+                print(f"error: {a} is not a folder", file=sys.stderr)
+                return 64
             else:
                 print(__doc__, file=sys.stderr)
                 return 64
@@ -447,6 +489,10 @@ def main(argv):
         releases = (default_trusted(), None)             # ready for a release to be dropped on the page
     try:
         from .analyses import BadQuestion
+        if question and releases:
+            wrong = question_problems(question, releases[0])
+            if wrong:
+                raise BadQuestion("the question does not fit the trusted release. " + "; ".join(wrong))
         httpd = make_server(host, port, findings, releases=releases, question=question)
     except BadQuestion as e:
         print(f"error: {e}", file=sys.stderr)

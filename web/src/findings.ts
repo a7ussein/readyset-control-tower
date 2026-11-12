@@ -16,7 +16,7 @@ export interface FileInfo { file: string; status: 'changed' | 'unchanged' | 'abs
 // One named row of a large file, with each sample's value in both releases, so a reader can check a finding by hand.
 export interface Witness { file: string; row: string; releases: string[]; values: { sample: string; before: string | null; after: string | null }[] }
 // A person's review of one finding, recorded by the server beside the findings.
-export interface Review { finding: string; key: string; status: 'confirmed' | 'dismissed'; reviewer?: string; role?: string; note?: string; at?: string }
+export interface Review { finding: string; key: string; status: 'confirmed' | 'dismissed'; fix?: 'approved' | ''; reviewer?: string; role?: string; note?: string; at?: string }
 export interface Findings {
   format_version: '0.2'
   producer: { team: string; product: string; track: string }

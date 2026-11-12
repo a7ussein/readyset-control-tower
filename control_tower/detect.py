@@ -28,7 +28,7 @@ def _plural(n, one, many=None):
 
 def _by_type(samples):
     counts = Counter(TYPE_NAMES.get(sample_type(s), "other") for s in samples)
-    return ", ".join(_plural(n, name) for name, n in counts.most_common())
+    return ", ".join(_plural(n, name, "metastases" if name == "metastasis" else None) for name, n in counts.most_common())
 
 
 def _key_kind(file):

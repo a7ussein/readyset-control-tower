@@ -187,3 +187,6 @@ td.absent { font-style: italic; opacity: .85 } td.delta { color: var(--muted) } 
 .waiting-note { text-align: center; color: var(--muted); margin-top: -18px }
 
 .as-button { display: inline-block; text-decoration: none }
+
+.also { display: flex; align-items: center; gap: 8px; font: 500 14.5px var(--text) } .also input { width: 18px; height: 18px; accent-color: var(--brand) }
+@media (max-width: 900px) { .effect { overflow-x: visible } .effect table, .more-body table { display: block; overflow-x: auto } .effect > p { overflow-wrap: anywhere } .release-line p { min-width: 0; overflow-wrap: anywhere } }

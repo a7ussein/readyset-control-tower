@@ -23,7 +23,7 @@ export async function loadFindings(analyses?: string[]): Promise<Findings> {
 }
 
 /** Record (or clear) a person's review of a finding. Resolves to false when there is no server to keep it. */
-export async function saveReview(review: { key: string; status: 'confirmed' | 'dismissed' | 'cleared'; reviewer?: string; role?: string; note?: string }): Promise<boolean> {
+export async function saveReview(review: { key: string; status: 'confirmed' | 'dismissed' | 'cleared'; fix?: 'approved' | ''; reviewer?: string; role?: string; note?: string }): Promise<boolean> {
   if (usingExample) return false
   try {
     // text/plain keeps this a simple request; the server reads the body as JSON and checks where it came from.

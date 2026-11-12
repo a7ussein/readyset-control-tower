@@ -167,7 +167,9 @@ def render(doc):
             said = "Confirmed as a real problem" if r.get("status") == "confirmed" else "Dismissed as an expected change"
             out.append(f"<p class=reviewed><b>Reviewed.</b> {said} by {e(r.get('reviewer') or 'a reviewer who gave no name')}"
                        f"{', ' + e(r['role']) if r.get('role') else ''}{', ' + e(r['at']) if r.get('at') else ''}."
-                       f"{' Note: ' + e(r['note']) if r.get('note') else ''}</p>")
+                       f"{' Note: ' + e(r['note']) if r.get('note') else ''}"
+                       + (" The suggested fix was approved." if r.get("fix") == "approved" else
+                          " The suggested fix has not been approved." if r.get("status") == "confirmed" else "") + "</p>")
         else:
             out.append("<p class=waiting><b>Not yet reviewed.</b> No person has confirmed or dismissed this change.</p>")
         out.append("</section>")

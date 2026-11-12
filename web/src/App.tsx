@@ -245,7 +245,7 @@ function TargetList({ items, limit = 8 }: { items: Pointer[]; limit?: number }) 
   )
 }
 
-type ReviewInput = { status: 'confirmed' | 'dismissed' | 'cleared'; reviewer: string; role: string; note: string }
+type ReviewInput = { status: 'confirmed' | 'dismissed' | 'cleared'; fix: 'approved' | ''; reviewer: string; role: string; note: string }
 const remembered = (k: string) => { try { return localStorage.getItem(k) ?? '' } catch { return '' } }
 
 const HEADLINE: Record<string, (reaching: number, total: number) => string> = {
@@ -257,13 +257,14 @@ const HEADLINE: Record<string, (reaching: number, total: number) => string> = {
 }
 
 /** The step a person takes. The tool finds and proposes; a person decides. */
-function Decision({ review, onReview }: { review?: Review; onReview: (r: ReviewInput) => void }) {
+function Decision({ review, onReview, hasFix }: { review?: Review; onReview: (r: ReviewInput) => void; hasFix: boolean }) {
+  const [fix, setFix] = useState(review?.fix === 'approved')
   const [reviewer, setReviewer] = useState(() => review?.reviewer || remembered('readyset-reviewer'))
   const [role, setRole] = useState(() => review?.role || remembered('readyset-role'))
   const [note, setNote] = useState(review?.note ?? '')
   const send = (status: ReviewInput['status']) => {
     try { localStorage.setItem('readyset-reviewer', reviewer); localStorage.setItem('readyset-role', role) } catch { /* storage may be off */ }
-    onReview({ status, reviewer: reviewer.trim(), role: role.trim(), note: note.trim() })
+    onReview({ status, fix: status === 'confirmed' && fix ? 'approved' : '', reviewer: reviewer.trim(), role: role.trim(), note: note.trim() })
   }
   const named = reviewer.trim().length > 0
   return (
@@ -271,7 +272,8 @@ function Decision({ review, onReview }: { review?: Review; onReview: (r: ReviewI
       <h3>Your decision</h3>
       {review
         ? <p className="decided"><span className="decided-mark" aria-hidden="true">{review.status === 'confirmed' ? '✓' : '–'}</span>
-            <span><strong>{review.status === 'confirmed' ? 'Confirmed as a real problem' : 'Dismissed as an expected change'}</strong><br />
+            <span><strong>{review.status === 'confirmed' ? 'Confirmed as a real problem' : 'Dismissed as an expected change'}</strong>
+              {review.status === 'confirmed' && (review.fix === 'approved' ? ' The suggested fix is approved.' : ' The suggested fix is not approved yet.')}<br />
               by {review.reviewer || 'someone who gave no name'}{review.role ? `, ${review.role}` : ''}{review.note ? `. "${review.note}"` : ''}</span></p>
         : <p className="quiet">The tool found this. It decides nothing. Check the proof, then say what it is. Your decision is written into the report.</p>}
       <div className="who">
@@ -279,6 +281,7 @@ function Decision({ review, onReview }: { review?: Review; onReview: (r: ReviewI
         <label>Your role<input id="review-role" value={role} onChange={e => setRole(e.target.value)} placeholder="Research engineer" /></label>
         <label className="wide">Note, optional<input id="review-note" value={note} onChange={e => setNote(e.target.value)} placeholder="What you checked" /></label>
       </div>
+      {hasFix && <label className="also"><input id="review-fix" type="checkbox" checked={fix} onChange={e => setFix(e.target.checked)} /> Also approve the suggested fix</label>}
       <div className="decide">
         <button type="button" className="big confirm" disabled={!named} onClick={() => send('confirmed')}>This is a real problem</button>
         <button type="button" className="big dismiss" disabled={!named} onClick={() => send('dismissed')}>This is expected</button>
@@ -321,7 +324,8 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step }: {
             return (
               <div className="effect" key={id}>
                 <p className="effect-head"><span className="ref">{id}</span> {nameOf(doc, id)}
-                  <Chip tone={`st-${text(analysis?.status)}`}>{STATUS[text(analysis?.status)] ?? 'no result'}</Chip></p>
+                  <Chip tone={`st-${text(analysis?.status)}`}>{text(analysis?.status) === 'not_rerun' ? 'could not be rerun' : STATUS[text(analysis?.status)] ?? 'no result'}</Chip></p>
+                {text(analysis?.status) === 'not_rerun' && <p className="plain">{text(analysis?.note)}</p>}
                 {together(id).length > 1 && <p className="quiet">These numbers are the effect of all {together(id).length} changes that reach {id} together ({together(id).join(', ')}). The analysis is rerun once, with every change in.</p>}
                 {analysis && <ResultTable analysis={analysis} releases={doc.releases} />}
               </div>
@@ -330,7 +334,7 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step }: {
         </div>
 
         <aside className="panel-side">
-          <SectionBoundary name="decision"><Decision key={finding.id} review={review} onReview={r => onReview(finding, r)} /></SectionBoundary>
+          <SectionBoundary name="decision"><Decision key={finding.id} review={review} onReview={r => onReview(finding, r)} hasFix={repairs.length > 0} /></SectionBoundary>
           <section className="fix">
             <h3>Suggested fix</h3>
             {repairs.length === 0 && <p className="quiet">None proposed.</p>}
@@ -554,7 +558,7 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
     const key = doc.reviewKeys[f.id] ?? f.id
     const kept = await saveReview({ key, ...r })
     if (kept) { setLocal(({ [f.id]: _gone, ...rest }) => rest); onChanged() }
-    else setLocal(prev => ({ ...prev, [f.id]: r.status === 'cleared' ? null : { finding: f.id, key, status: r.status, reviewer: r.reviewer, role: r.role, note: r.note, at: new Date().toISOString() } }))
+    else setLocal(prev => ({ ...prev, [f.id]: r.status === 'cleared' ? null : { finding: f.id, key, status: r.status, fix: r.fix, reviewer: r.reviewer, role: r.role, note: r.note, at: new Date().toISOString() } }))
   }
   const reviewed = doc.findings.filter(f => reviewOf(f.id)).length
   const toggle = (id: string) => {
@@ -686,8 +690,10 @@ export default function App() {
           ReadySet
         </a>
         <span className="product">Control Tower</span>
-        {releases.length === 2 && <p className="pair">Trusted <code>{releases[0]}</code> <span aria-hidden="true">→</span> new <code>{releases[1]}</code></p>}
-        <a className="header-link" href="#files">Report</a>
+        {state?.trusted && !state.new
+          ? <p className="pair">Trusted <code>{state.trusted_name}</code></p>
+          : releases.length === 2 && <p className="pair">Trusted <code>{releases[0]}</code> <span aria-hidden="true">→</span> new <code>{releases[1]}</code></p>}
+        {!(state?.trusted && !state.new) && <a className="header-link" href="#files">Get the report</a>}
         <button type="button" className="theme-toggle" onClick={toggle} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}>{theme === 'dark' ? '☀' : '☾'}</button>
       </header>
       <main>
