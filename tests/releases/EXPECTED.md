@@ -15,6 +15,8 @@
 | t10 | four sample_swap findings in the protein file, or fewer if swaps chain together (one finding naming every sample in the chain) | changed | not touched | Conditional |
 | t11 | one label_conflict in clinical.tsv naming 10 samples | affected if any of the 10 is in the protein file: those samples drop out of A1, so its sample count shrinks | not touched | Conditional |
 | t12 | one duplicate naming 3 copies, each with its LumA source; one membership_change naming 3 Basal samples that left; all in the mutation file | not touched | not touched | Conditional |
+| t13 | one sample_swap in the protein file naming both samples; nothing about the missing RNA file | changed | not touched | Conditional |
+| t14 | none; the missing RNA file is noted but not reported as a finding | not touched | not touched | Ready |
 
 In every test: nothing reported that was not planted, and the output passes the organisers' validator.
 

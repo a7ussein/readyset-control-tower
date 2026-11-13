@@ -1,0 +1,3 @@
+{"name": "t13-envelope-swap-no-rna", "seed": 113,
+ "changes": [{"type": "swap_samples", "file": "protein_rppa.tsv.gz", "count": 1, "opposite_er": true}],
+ "remove_files": ["rna_hiseq.tsv.gz"]}
