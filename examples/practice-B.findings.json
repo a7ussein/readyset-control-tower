@@ -359,8 +359,8 @@
   ],
   "x_readyset": {
     "engine_version": "0.1.0",
-    "generated_at": "2026-11-12T22:57:13+00:00",
-    "run_seconds": 0.86,
+    "generated_at": "2026-11-13T00:52:03+00:00",
+    "run_seconds": 0.81,
     "analyses_registered": [
       "A1",
       "A2"
@@ -386,7 +386,7 @@
           "A1 is touched: it reads the ERALPHA row of protein_rppa.tsv.gz and the breast_carcinoma_estrogen_receptor_status column of clinical.tsv, for primary tumours whose value there is Positive or Negative.",
           "A2 is not touched: it reads the PAM50Call_RNAseq column of clinical.tsv, for primary tumours that have a value there."
         ],
-        "severity": "High: samples carry another sample's data. A swap is rated high wherever it is, because anything computed from those samples is wrong."
+        "severity": "High: samples that A1 reads carry another sample's data. Which samples are hit is chance, so this could change the answer by a lot. In this release, on its own, it moves difference of A1 by 1.1%."
       },
       "F2": {
         "detected_by": "A sample id in the new release has a fingerprint identical to a different sample's, and the two were not identical in the trusted release. An id that already existed counts as a copy only if at least half of its informative cells changed.",
@@ -394,7 +394,7 @@
           "A1 is touched: it reads the ERALPHA row of protein_rppa.tsv.gz and the breast_carcinoma_estrogen_receptor_status column of clinical.tsv, for primary tumours whose value there is Positive or Negative.",
           "A2 is not touched: it reads the PAM50Call_RNAseq column of clinical.tsv, for primary tumours that have a value there."
         ],
-        "severity": "High: a sample id carries a copy of another sample's data, so one sample is counted twice."
+        "severity": "High: samples that A1 reads are copies of other samples, so those are counted twice. Which samples are hit is chance, so this could change the answer by a lot. In this release, on its own, it moves difference of A1 by 0.13%."
       },
       "F3": {
         "detected_by": "The set of sample ids in the file differs between the two releases. Ids that arrived as copies of another sample are reported separately as duplicates.",
@@ -402,7 +402,7 @@
           "A1 is touched: it reads the ERALPHA row of protein_rppa.tsv.gz and the breast_carcinoma_estrogen_receptor_status column of clinical.tsv, for primary tumours whose value there is Positive or Negative.",
           "A2 is not touched: it reads the PAM50Call_RNAseq column of clinical.tsv, for primary tumours that have a value there."
         ],
-        "severity": "Medium: samples left or joined. Coverage changed, but the values that remain are intact."
+        "severity": "Medium: on its own it moves n negative of A1 by 1.8%, and no headline number (the difference, a group mean or a share) by half a percent."
       }
     },
     "effects": {

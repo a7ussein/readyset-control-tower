@@ -47,9 +47,10 @@ need nothing that isn't in that file. If it does, tell Ahmed and the file gets a
 ## Decisions we need from the team
 1. **The verdict rule.** Ready = nothing changed. Conditional = things changed, we reran what was affected, a person
    reviews. Blocked = an affected result can't be rerun. Insufficient Evidence = a file is missing. Agree or change.
-2. **Severity** goes by the kind of problem, not by the question: a swap or a copy is high, lost or added samples
-   are medium, and other edits are high where a registered analysis reads them, medium otherwise. Changed after
-   kickoff and two independent reviews, to follow the organisers' reference output.
+2. **Severity** is how much the finding could change the research answer, with the reason written out. That is
+   the organisers' rule, posted 12 Nov. Low: it cannot change the answer. Medium: it changes it slightly. High: a
+   headline number moves by half a percent or more, an analysis cannot run, or samples the analysis reads were
+   swapped or copied.
 3. **A copied sample is reported twice**, as a duplicate and as a membership change. Fine, or one finding?
 4. **The interface.** Carry over the ReadySet page and design for James to re-point, or start fresh?
 

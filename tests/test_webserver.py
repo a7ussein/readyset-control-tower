@@ -56,7 +56,7 @@ class Server(unittest.TestCase):
         self.assertEqual([a["id"] for a in both["x_readyset"]["live"]["available"]], ["A1", "A2"])
         only_a2 = json.loads(self.get(base + "/api/findings?for=A2")[1])
         self.assertEqual((only_a2["verdict"], only_a2["findings"][0]["severity"], only_a2["findings"][0]["affects_analyses"]),
-                         ("Ready", "high", []))
+                         ("Ready", "low", []))
         self.assertEqual(self.get(base + "/api/findings?for=A9")[0], 400)
 
     def test_live_mode_offers_an_analysis_described_in_a_question_file(self):

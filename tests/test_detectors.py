@@ -13,7 +13,6 @@ from tests.tiny_release import (A1_BEFORE, A2_BEFORE, CLIN_ONLY, CLINICAL, COPY_
                                 NEW1, NEW2, NORMAL, P1, P2, P3, PAM50, PROTEIN, RNA, SURVIVAL, U1, TinyRelease)
 
 from control_tower import compare
-from control_tower.compare import _severity
 
 
 def samples(finding):
@@ -38,7 +37,7 @@ class Detectors(unittest.TestCase):
         for_a2 = self.run_pair(swap, ["A2"])
         f = self.only("sample_swap")                                           # still reported, never hidden
         self.assertEqual((for_a2["verdict"], f["severity"], f["affects_analyses"], f["not_affected_analyses"]),
-                         ("Ready", "high", [], ["A2"]))                     # as serious as before; it just does not reach A2
+                         ("Ready", "low", [], ["A2"]))                      # it cannot change A2's answer
         self.assertEqual([(a["id"], a["status"]) for a in for_a2["analyses"]], [("A2", "not_rerun")])
         self.assertEqual(for_a2["x_readyset"]["unrelated_findings"], 1)
         self.assertIn("A2", for_a2["question"])
@@ -134,20 +133,27 @@ class Detectors(unittest.TestCase):
         with self.assertRaises(BadQuestion):
             self.run_pair(lambda b: b, [{"id": "Q1", "type": "category_mix", "column": "no_such_column"}])
 
-    def test_severity_goes_by_the_kind_of_problem_and_never_by_the_question(self):
-        self.assertEqual([_severity(k, False) for k in ("sample_swap", "duplicate", "membership_change", "label_conflict", "other")],
-                         ["high", "high", "medium", "medium", "medium"])
-        self.assertEqual([_severity(k, True) for k in ("label_conflict", "missing_data", "other", "membership_change")],
-                         ["high", "high", "high", "medium"])
-        for file in (COPY_NUMBER, MUTATION):                                      # a swap nobody reads is still a swap
-            self.run_pair(lambda b: b.swap(file, P1, N1))
-            self.assertEqual((self.only("sample_swap")["severity"], self.doc["verdict"]), ("high", "Ready"))
+    def test_severity_is_how_much_the_finding_could_change_the_research_answer(self):
+        why = lambda doc, f: doc["x_readyset"]["rules"][f["id"]]["severity"]
+        for file in (COPY_NUMBER, MUTATION):                                      # nothing in the question reads it
+            doc = self.run_pair(lambda b: b.swap(file, P1, N1))
+            f = self.only("sample_swap")
+            self.assertEqual((f["severity"], doc["verdict"]), ("low", "Ready"))
+            self.assertIn("cannot change this research answer", why(doc, f))
+        doc = self.run_pair(lambda b: b.swap(PROTEIN, P1, P2))                     # same ER group: the result holds today
+        f = self.only("sample_swap")
+        self.assertEqual(f["severity"], "high")                                    # but which samples are hit is chance
+        self.assertIn("exactly the same", why(doc, f))
         relabel = lambda b: b.relabel(ER, P1, "Negative")
-        both = self.run_pair(relabel)["findings"][0]["severity"]
-        only_a2 = self.run_pair(relabel, ["A2"])["findings"][0]["severity"]
-        self.assertEqual((both, only_a2), ("high", "high"))                       # the same finding, whatever is asked
-        unread = self.run_pair(lambda b: b.relabel(HISTOLOGY, P1, "Other"))
-        self.assertEqual(unread["findings"][0]["severity"], "medium")
+        both = self.run_pair(relabel)
+        self.assertEqual(both["findings"][0]["severity"], "high")
+        self.assertIn("on its own it moves", why(both, both["findings"][0]))
+        only_a2 = self.run_pair(relabel, ["A2"])                                   # the same change, a question it cannot touch
+        self.assertEqual(only_a2["findings"][0]["severity"], "low")
+        gone = self.run_pair(lambda b: b.drop_row(PROTEIN, "ERALPHA"))             # A1 cannot run at all
+        blocked = [f for f in gone["findings"] if "A1" in f["affects_analyses"]]
+        self.assertTrue(blocked and all(f["severity"] == "high" for f in blocked))
+        self.assertIn("cannot be rerun", why(gone, blocked[0]))
 
     def test_a_release_without_a_file_no_analysis_reads_is_still_compared(self):
         # Saturday's envelopes carry five files: no RNA. Neither registered analysis reads RNA.
@@ -260,7 +266,7 @@ class Detectors(unittest.TestCase):
         self.run_pair(lambda b: b.swap(COPY_NUMBER, P1, N1))
         f = self.only("sample_swap")
         self.assertEqual((f["affects_analyses"], f["not_affected_analyses"]), ([], ["A1", "A2"]))
-        self.assertEqual(f["severity"], _severity(f["kind"], False))
+        self.assertEqual(f["severity"], "low")                                  # it cannot change either answer
         self.assertEqual([a["status"] for a in self.doc["analyses"]], ["not_rerun", "not_rerun"])
         self.assertFalse(self.files()[RNA]["opened"])
 
@@ -288,7 +294,8 @@ class Detectors(unittest.TestCase):
         # The new id has no clinical record, so A1 never reads the copy. What moves A1 is the sample that left.
         self.assertEqual((dup["affects_analyses"], mem["affects_analyses"]), ([], ["A1"]))
         self.assertEqual(self.analysis("A1")["status"], "changed")
-        self.assertEqual(mem["severity"], "medium")        # lost coverage is never rated high, even when the result moves
+        self.assertEqual(mem["severity"], "high")          # one of five samples gone moves the result a lot here
+        self.assertIn("on its own", self.doc["x_readyset"]["rules"][mem["id"]]["severity"])
         self.assertEqual(self.analysis("A1")["after"]["n_negative"], 1)
 
     def test_a_copy_landing_on_an_id_that_has_a_clinical_record_does_affect_a1(self):
@@ -359,7 +366,7 @@ class Detectors(unittest.TestCase):
         self.run_pair(lambda b: b.relabel(HISTOLOGY, P1, "Lobular"))
         f = self.only("label_conflict")
         self.assertEqual((f["affects_analyses"], f["not_affected_analyses"]), ([], ["A1", "A2"]))
-        self.assertEqual(f["severity"], _severity(f["kind"], False))
+        self.assertEqual(f["severity"], "low")                                  # it cannot change either answer
 
     def test_er_status_relabelled_for_a_sample_with_no_protein_data_does_not_affect_a1(self):
         self.run_pair(lambda b: b.relabel(ER, NORMAL, "Negative"))             # the normal is not in the protein file

@@ -188,9 +188,8 @@ def compare(folder_a, folder_b, analyses=None):
     for i, f in enumerate(raw, 1):
         fid = f"F{i}"
         moved = [a for a in f["affects"] if status_of[a] in ("changed", "blocked")]
-        severity = _severity(f["kind"], f["read_by_any"])
         findings.append({
-            "id": fid, "kind": f["kind"], "summary": f["summary"], "severity": severity,
+            "id": fid, "kind": f["kind"], "summary": f["summary"], "severity": "low",       # set below, from its effect
             "confidence": f["confidence"], "evidence": f["evidence"],
             "affects_analyses": f["affects"],
             "not_affected_analyses": [a.id for a in chosen if a.id not in f["affects"]],
@@ -199,15 +198,18 @@ def compare(folder_a, folder_b, analyses=None):
             if r:
                 repairs.append({"id": f"R{len(repairs) + 1}", "action": r["action"], "targets": r["targets"],
                                 "justification": r["justification"], "addresses": [fid]})
-    effects, priority = _effects(raw, findings, repairs, chosen, folder_a, folder_b)
+    effects = _effects(raw, findings, chosen, folder_a, folder_b)
+    severity_why = {}
+    for f in findings:
+        f["severity"], severity_why[f["id"]] = _severity(f, effects.get(f["id"], {}))
+    priority = _priority(findings, repairs, effects)
     witness = _witness(raw, folder_a, folder_b, rel_a, rel_b, chosen)
     rules = {}
     for f, raw_f in zip(findings, raw):
         reads = [f"{a.id} {'is touched' if a.id in raw_f['affects'] else 'is not touched'}: it reads {a.reads()}."
                  for a in chosen]
-        why = SEVERITY_WHY[(f["kind"] if f["kind"] in ("sample_swap", "duplicate", "membership_change") else "other",
-                            f["severity"])]
-        rules[f["id"]] = {"detected_by": DETECTED_BY.get(f["kind"], DETECTED_BY["other"]), "impact": reads, "severity": why}
+        rules[f["id"]] = {"detected_by": DETECTED_BY.get(f["kind"], DETECTED_BY["other"]), "impact": reads,
+                          "severity": severity_why[f["id"]]}
     for entry in analyses:
         because = entry.pop("_because", None)
         if because is not None and "note" not in entry:
@@ -254,27 +256,36 @@ def compare(folder_a, folder_b, analyses=None):
     }
 
 
-def _severity(kind, read_by_any):
-    """How serious the data problem is, by what kind of problem it is. It does not change with the question: how far
-    a finding reaches into your analyses is reported separately (affects_analyses, effects, repair_priority).
+def _percent(fraction):
+    return "more than 100%" if fraction >= 1 else f"{fraction * 100:.{2 if fraction < 0.01 else 1}f}%"
 
-    This follows the organisers' reference output, which rates a swap and a copy high and lost samples medium even
-    though all three moved the same result."""
+
+def _severity(finding, own):
+    """(severity, the reason in words). Severity is how much the finding could change the research answer, which is
+    the organisers' stated rule ("Rate each one by how much it could change the research answer, and say why").
+
+    `own` is the finding's effect on each analysis in the question, computed on its own (see _effects). So severity
+    follows the question: the same finding is low for a question that reads none of what changed."""
+    kind, reached = finding["kind"], finding["affects_analyses"]
+    if not reached:
+        return "low", ("Low: nothing in the question reads what changed, so it cannot change this research answer. "
+                       "It is still a real change in the release.")
+    if not own:
+        return "high", f"High: {' and '.join(reached)} cannot be rerun until this is resolved, so the answer is unknown."
+    aid, worst = max(own.items(), key=lambda kv: ({"none": 0, "small": 1, "large": 2}[kv[1]["size"]], kv[1]["moved_by"]))
+    measured = ("it leaves the result exactly the same" if worst["size"] == "none" else
+                f"it moves {str(worst['measure']).replace('_', ' ')} of {aid} by {_percent(worst['moved_by'])}")
     if kind in ("sample_swap", "duplicate"):
-        return "high"                           # samples carry someone else's data
-    if kind == "membership_change":
-        return "medium"                         # coverage lost or gained; the values that remain are intact
-    return "high" if read_by_any else "medium"  # labels, missing values, other edits: high where an analysis reads them
+        what = "carry another sample's data" if kind == "sample_swap" else "are copies of other samples, so those are counted twice"
+        return "high", (f"High: samples that {aid} reads {what}. Which samples are hit is chance, so this could change the "
+                        f"answer by a lot. In this release, on its own, {measured}.")
+    if worst["size"] == "large":
+        return "high", f"High: on its own {measured}, which is half a percent or more on a headline number."
+    if worst["size"] == "small":
+        return "medium", (f"Medium: on its own {measured}, and no headline number (the difference, a group mean or a share) "
+                          f"by half a percent.")
+    return "low", f"Low: it touches what {aid} reads, but on its own {measured}."
 
-
-SEVERITY_WHY = {
-    ("sample_swap", "high"): "High: samples carry another sample's data. A swap is rated high wherever it is, because "
-                             "anything computed from those samples is wrong.",
-    ("duplicate", "high"): "High: a sample id carries a copy of another sample's data, so one sample is counted twice.",
-    ("membership_change", "medium"): "Medium: samples left or joined. Coverage changed, but the values that remain are intact.",
-    ("other", "high"): "High: the changed values are ones a registered analysis reads.",
-    ("other", "medium"): "Medium: values changed, but no registered analysis reads them.",
-}
 
 SMALL = 0.005        # below half a percent on every headline number, a result moved only slightly
 
@@ -328,9 +339,9 @@ def _size(before, after):
     return "small", worst, round(most, 5)
 
 
-def _effects(raw, findings, repairs, chosen, folder_a, folder_b):
+def _effects(raw, findings, chosen, folder_a, folder_b):
     """What each finding does to each analysis on its own: the analysis recomputed on the trusted release with only
-    that finding's changes applied. Also how urgently each suggested fix is needed, sized by that effect."""
+    that finding's changes applied."""
     inputs = {}
     for a in chosen:
         try:
@@ -352,6 +363,11 @@ def _effects(raw, findings, repairs, chosen, folder_a, folder_b):
             size, measure, by = _size(before, alone)
             effects.setdefault(f["id"], {})[a.id] = {"before": before, "after": alone, "size": size,
                                                      "measure": measure, "moved_by": by}
+    return effects
+
+
+def _priority(findings, repairs, effects):
+    """How urgently each suggested fix is needed, sized by its finding's own effect."""
     priority = {}
     for r in repairs:
         fid = r["addresses"][0]
@@ -373,7 +389,7 @@ def _effects(raw, findings, repairs, chosen, folder_a, folder_b):
         else:
             priority[r["id"]] = {"level": "no effect on the result", "why": "It touches samples a result reads, but on its own "
                                  "the result is the same. Fix it when convenient."}
-    return effects, priority
+    return priority
 
 
 def _witness(raw, folder_a, folder_b, rel_a, rel_b, chosen):
