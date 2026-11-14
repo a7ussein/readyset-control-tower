@@ -45,6 +45,15 @@ The Cohort Firewall track is scored on seven criteria. This is where to look for
 | **Useful next steps**: fixes that match the size of the problem | "So what?" and "Suggested fix" on each change, marked "before use" or "small effect". | `repairs` and `x_readyset.repair_priority` in `findings.json`. |
 | **Communication**: understandable without specialist knowledge | The verdict in one sentence, the audit report in plain English, the change log as a spreadsheet. | `control_tower/report.py`, `control_tower/changelog.py`. |
 
+## How a change is rated, and why
+
+- **By what it does to the result**, measured by rerunning the analysis with that one change alone. This is the organisers' rule: rate each change by how much it could change the research answer, and say why.
+- **The half-percent line.** A result is usually quoted to three significant figures, and a shift of about half a percent is where such a figure starts to read differently (3.05 becomes 3.07). Below it a change is a small effect; at or above it, a large one. It is a stated convention, shown on the page so it can be challenged, not a validated standard.
+- **Swaps and copies are rated high whatever they measure today**, because which samples get exchanged or copied is chance.
+- **A change no chosen analysis reads is rated low for that question** and stays listed: it is still a real change in the data.
+
+Known limits: a copy is named only when every value matches (a copy with a few altered values is reported as changed, not as a copy), and values are compared as exact text (1.0 and 1 differ).
+
 ## Status
 
 The comparison engine and the page both work. The engine is tested, and the two together have been run on the organisers' practice release.
