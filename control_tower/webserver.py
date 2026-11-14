@@ -140,8 +140,76 @@ class Handler(BaseHTTPRequestHandler):
                 pass
         self._json(200, reply)
 
-    def _findings(self, wanted, as_report=False):
+    def _history_path(self):
+        srv = self.server
+        if not srv.reviews_path or not (srv.releases and all(srv.releases)):
+            return None
+        return os.path.join(os.path.dirname(srv.reviews_path) or ".", "control-tower.history.json")
+
+    def _remember(self, doc):
+        """Keep a line of history for this comparison: when, which two releases, the verdict and each change. One entry
+        per pair of releases, updated when it is looked at again, so a person can go back to an earlier comparison."""
+        path = self._history_path()
+        if not path:
+            return
+        srv = self.server
+        trusted, new = srv.releases
+        x = doc.get("x_readyset") if isinstance(doc.get("x_readyset"), dict) else {}
+        reviewed = {r.get("finding"): r.get("status") for r in x.get("reviews", []) if isinstance(r, dict)}
+        entry = {"trusted": trusted, "new": new, "trusted_name": _label(trusted), "new_name": _label(new),
+                 "verdict": doc.get("verdict"),
+                 "changes": [{"id": f.get("id"), "kind": f.get("kind"), "severity": f.get("severity"), "summary": f.get("summary"),
+                              "decision": reviewed.get(f.get("id"), "")}
+                             for f in doc.get("findings", []) if isinstance(f, dict)],
+                 "analyses": [{"id": a.get("id"), "status": a.get("status")} for a in doc.get("analyses", []) if isinstance(a, dict)]}
+        with srv.lock:
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    history = [h for h in json.load(fh) if isinstance(h, dict)]
+            except (OSError, ValueError, TypeError):
+                history = []
+            old = next((h for h in history if h.get("trusted") == trusted and h.get("new") == new), None)
+            now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            if old and {k: old.get(k) for k in entry} == entry:
+                return
+            entry["first_compared"] = (old or {}).get("first_compared") or now
+            entry["last_changed"] = now
+            history = [h for h in history if h is not old] + [entry]
+            try:
+                with open(path, "w", encoding="utf-8") as fh:
+                    json.dump(history[-200:], fh, indent=2)
+                    fh.write("\n")
+            except OSError:
+                pass
+
+    def _history(self):
+        path = self._history_path()
+        try:
+            with open(path, encoding="utf-8") as fh:
+                history = [h for h in json.load(fh) if isinstance(h, dict)]
+        except (OSError, ValueError, TypeError):
+            history = []
+        now = self.server.releases or (None, None)
+        for h in history:
+            h["available"] = os.path.isdir(str(h.get("trusted"))) and os.path.isdir(str(h.get("new")))
+            h["current"] = (h.get("trusted"), h.get("new")) == tuple(now)
+        history.sort(key=lambda h: str(h.get("first_compared")), reverse=True)
+        self._json(200, {"comparisons": history})
+
+    def _findings(self, wanted, as_report=False, as_changelog=False):
         status, doc = self._reviewed(wanted)
+        if status == 200 and not wanted and isinstance(doc, dict) and isinstance(doc.get("findings"), list):
+            self._remember(doc)                                # the default question is the one history keeps
+        if as_changelog and status == 200:
+            from .changelog import to_csv
+            body = to_csv(doc).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv; charset=utf-8")
+            self.send_header("Content-Disposition", 'attachment; filename="change-log.csv"')
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            return self.wfile.write(body)
         if as_report and status == 200:
             from .report import render
             body = render(doc).encode("utf-8")
@@ -426,6 +494,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._findings(parse_qs(urlsplit(self.path).query).get("for", [""])[0])
             if path == "/api/report":
                 return self._findings(parse_qs(urlsplit(self.path).query).get("for", [""])[0], as_report=True)
+            if path == "/api/changelog":
+                return self._findings(parse_qs(urlsplit(self.path).query).get("for", [""])[0], as_changelog=True)
+            if path == "/api/history":
+                return self._history()
             if path.startswith("/api/"):
                 return self._json(404, {"detail": f"no such endpoint: GET {path}"})
             self._static(path)

@@ -46,6 +46,7 @@ class Server(unittest.TestCase):
         d = tempfile.mkdtemp()
         a = TinyRelease()
         b = a.copy().swap(PROTEIN, P1, N1)
+        more.setdefault("settings", os.path.join(d, "settings.json"))        # never the real settings beside the tool
         return self.start(releases=(a.write(os.path.join(d, "A")), b.write(os.path.join(d, "B"))),
                           reviews=os.path.join(d, "reviews.json"), **more), d
 
@@ -316,6 +317,44 @@ class Server(unittest.TestCase):
                     with open(path, errors="ignore") as fh:
                         self.assertNotIn(secret, fh.read())
             self.assertEqual(self.post(base + "/api/model-key", {"key": ""})[1], {"ai_understanding": ""})
+
+    def test_the_change_log_is_a_spreadsheet_with_a_row_for_every_affected_sample(self):
+        import csv, io
+        from tests.tiny_release import N1, P1, PROTEIN
+        base, _ = self.live()
+        doc = json.loads(self.get(base + "/api/findings")[1])
+        self.post(base + "/api/reviews", {"key": doc["x_readyset"]["review_keys"]["F1"], "status": "confirmed", "fix": "approved",
+                                          "reviewer": "R. Engineer", "role": "research engineer"})
+        status, body, headers = self.get(base + "/api/changelog")
+        self.assertEqual(status, 200)
+        self.assertIn("change-log.csv", headers["Content-Disposition"])
+        table = list(csv.DictReader(io.StringIO(body.decode("utf-8-sig"))))
+        self.assertEqual(sorted(r["sample"] for r in table), sorted([P1, N1]))
+        row = next(r for r in table if r["sample"] == P1)
+        self.assertEqual((row["change"], row["kind"], row["file"], row["affects_analyses"]), ("F1", "Samples exchanged", PROTEIN, "A1"))
+        self.assertNotEqual(row["value_in_A"], row["value_in_B"])                  # the value before and after
+        self.assertEqual((row["decision"], row["decided_by"]), ("confirmed as a real problem; suggested fix approved", "R. Engineer"))
+        self.assertEqual(row["suggested_fix"], "restore from previous release")
+
+    def test_history_keeps_every_comparison_so_an_earlier_one_can_be_opened_again(self):
+        from tests.tiny_release import N1, P1, PROTEIN, TinyRelease
+        base, d = self.live()
+        self.assertEqual(json.loads(self.get(base + "/api/history")[1])["comparisons"], [])
+        self.get(base + "/api/findings")
+        first = json.loads(self.get(base + "/api/history")[1])["comparisons"]
+        self.assertEqual([(h["trusted_name"], h["new_name"], h["verdict"], h["current"], h["available"]) for h in first],
+                         [("A", "B", "Conditional", True, True)])
+        self.assertEqual([c["kind"] for c in first[0]["changes"]], ["sample_swap"])
+        clean = TinyRelease().write(os.path.join(d, "C"))                          # a second release, with nothing changed
+        self.post(base + "/api/release", {"path": clean})
+        self.get(base + "/api/findings")
+        both = json.loads(self.get(base + "/api/history")[1])["comparisons"]
+        self.assertEqual(sorted((h["new_name"], h["verdict"], h["current"]) for h in both), [("B", "Conditional", False), ("C", "Ready", True)])
+        earlier = next(h for h in both if h["new_name"] == "B")
+        self.post(base + "/api/release", {"trusted": earlier["trusted"], "path": earlier["new"]})      # go back to it
+        self.assertEqual(json.loads(self.get(base + "/api/findings")[1])["verdict"], "Conditional")
+        self.get(base + "/api/findings")
+        self.assertEqual(len(json.loads(self.get(base + "/api/history")[1])["comparisons"]), 2)       # looked at again, not added again
 
     def test_the_audit_report_says_the_same_things_in_plain_english(self):
         base, _ = self.live()

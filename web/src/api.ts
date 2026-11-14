@@ -101,3 +101,20 @@ export const openEnvelope = async (number: string, words: string) =>
 /** Give (or, with an empty string, forget) the user's own Anthropic key. Kept in the local tool's memory only. */
 export const setModelKey = async (key: string) =>
   json<{ ai_understanding: string }>(await fetch(`${base}/api/model-key`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ key }) }))
+
+/** Where the change log (a spreadsheet, one row per affected sample) can be downloaded. Null when there is no server. */
+export function changelogUrl(analyses: string[]): string | null {
+  if (usingExample) return null
+  return `${base}/api/changelog${analyses.length ? `?for=${encodeURIComponent(analyses.join(','))}` : ''}`
+}
+
+export interface PastComparison {
+  trusted: string; new: string; trusted_name: string; new_name: string; verdict: string; first_compared: string; last_changed: string
+  changes: { id: string; kind: string; severity: string; summary: string; decision: string }[]
+  available: boolean; current: boolean
+}
+/** Every comparison this tool has made on this computer, newest first. Empty when there is no server. */
+export async function pastComparisons(): Promise<PastComparison[]> {
+  if (usingExample) return []
+  try { return (await json<{ comparisons: PastComparison[] }>(await fetch(`${base}/api/history`))).comparisons ?? [] } catch { return [] }
+}

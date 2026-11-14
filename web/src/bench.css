@@ -249,3 +249,11 @@ article.panel.pointed { outline: 3px solid var(--point); outline-offset: 6px; bo
 .ask-key { padding: 0 16px 12px; font-size: 12.5px; color: var(--muted) } .ask-key summary { cursor: pointer; color: var(--brand); font-weight: 600 }
 .ask-key form { display: flex; gap: 8px; margin-top: 8px } .ask-key input { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: var(--surface); color: var(--ink); font: 400 13px var(--mono) }
 .ask-key .ghost { padding: 6px 12px; font-size: 13px } .ask-key p { margin-top: 6px }
+
+/* ---- History: earlier comparisons ---- */
+.history { flex-basis: 100%; width: 100%; font-size: 14px } .history > summary { cursor: pointer; color: var(--brand); font-weight: 600 }
+.history ol { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px }
+.history ol > li { border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; background: var(--surface) } .history ol > li.current { border-color: var(--brand) }
+.history-row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline } .history-when { color: var(--muted); font-variant-numeric: tabular-nums }
+.history-verdict { font-weight: 700 } .history-verdict.ready { color: var(--ready) } .history-verdict.conditional { color: var(--conditional) } .history-verdict.blocked { color: var(--blocked) } .history-verdict.insufficient { color: var(--insufficient) }
+.history ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); display: flex; flex-direction: column; gap: 3px }

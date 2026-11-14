@@ -2,7 +2,7 @@
 // Everything it shows comes from findings.json (docs/OUTPUT-CONTRACT.md). It counts and formats; it computes no results.
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import './bench.css'
-import { addAnalysis, analysisOptions, columnValues, loadFindings, openEnvelope, releaseState, reportUrl, rowNames, saveReview, setRelease, uploadRelease, usingExample, type AnalysisOptions, type ReleaseState } from './api'
+import { addAnalysis, analysisOptions, changelogUrl, columnValues, loadFindings, openEnvelope, pastComparisons, releaseState, reportUrl, rowNames, saveReview, setRelease, uploadRelease, usingExample, type AnalysisOptions, type PastComparison, type ReleaseState } from './api'
 import type { Analysis, FileInfo, Finding, Findings, Pointer, Repair, Review, Witness } from './findings'
 import { useTheme } from './theme'
 import { SectionBoundary } from './SectionBoundary'
@@ -422,6 +422,10 @@ function FilesAndDownload({ raw, doc }: { raw: Findings; doc: Doc }) {
           {reportUrl(doc.asked)
             ? <p><a className="primary as-button" href={reportUrl(doc.asked) ?? undefined} download="audit-report.html">Download the audit report</a></p>
             : <p className="quiet">The audit report is available when the page is comparing real releases.</p>}
+          {changelogUrl(doc.asked) && <>
+            <p><strong>For a spreadsheet:</strong> the change log has one row per affected sample: the change, the value before and after, the analysis it touches, the suggested fix and the decision.</p>
+            <p><a className="ghost as-button" href={changelogUrl(doc.asked) ?? undefined} download="change-log.csv">Download the change log (CSV)</a></p>
+          </>}
           <p><strong>For other tools:</strong> the same findings as one file the organisers' checker and the review team's tool can read.</p>
           <p><button type="button" className="ghost" onClick={download}>Download findings.json</button></p>
           {failed && <p className="quiet" role="alert">The download could not be started.</p>}
@@ -533,6 +537,42 @@ async function droppedFiles(data: DataTransfer): Promise<{ files: File[]; name: 
   return { files, name: entries[0].name }
 }
 
+// Every comparison made on this computer, so a person can go back to an earlier release and see what had changed.
+function History({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: ReleaseState) => void }) {
+  const [past, setPast] = useState<PastComparison[]>([])
+  const [problem, setProblem] = useState('')
+  useEffect(() => { let on = true; void pastComparisons().then(p => { if (on) setPast(p) }); return () => { on = false } }, [state.trusted, state.new])
+  if (past.length === 0) return null
+  const open = async (p: PastComparison) => {
+    setProblem('')
+    try { onLoaded(await setRelease({ trusted: p.trusted, path: p.new })) } catch (e) { setProblem(e instanceof Error ? e.message : String(e)) }
+  }
+  const when = (iso: string) => { const d = new Date(iso); return isNaN(d.getTime()) ? iso : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) }
+  return (
+    <details className="history">
+      <summary>History: {plural(past.length, 'comparison')} on this computer</summary>
+      <ol>
+        {past.map(p => (
+          <li key={`${p.trusted}|${p.new}`} className={p.current ? 'current' : undefined}>
+            <div className="history-row">
+              <span className="history-when">{when(p.first_compared)}</span>
+              <span><code>{p.trusted_name}</code> <span aria-hidden="true">→</span> <code>{p.new_name}</code></span>
+              <span className={`history-verdict ${(VERDICT[p.verdict] ?? { tone: 'insufficient' }).tone}`}>{p.verdict}</span>
+              {p.current ? <span className="quiet">showing now</span>
+                : p.available ? <button type="button" className="link" onClick={() => void open(p)}>Open it again</button>
+                : <span className="quiet">its files are no longer on this computer</span>}
+            </div>
+            {p.changes.length > 0
+              ? <ul>{p.changes.map(c => <li key={c.id}><strong>{c.id}</strong> {c.summary}{c.decision ? ` (${c.decision})` : ''}</li>)}</ul>
+              : <p className="quiet">Nothing had changed.</p>}
+          </li>
+        ))}
+      </ol>
+      {problem && <p className="error inline" role="alert">{problem}</p>}
+    </details>
+  )
+}
+
 function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: ReleaseState) => void }) {
   const [open, setOpen] = useState(!state.new)
   const [over, setOver] = useState(false)
@@ -569,6 +609,7 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
       <section className="release-line" aria-label="The two releases">
         <p>Comparing the trusted release <code>{state.trusted_name}</code> with the new release <code>{state.new_name}</code>.</p>
         <button type="button" className="ghost small" onClick={() => setOpen(true)}>Compare a different release</button>
+        <History state={state} onLoaded={onLoaded} />
       </section>
     )
   }
@@ -613,6 +654,7 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
         <button type="submit" className="primary" disabled={!envelope.trim() || code.trim().split(/\s+/).length !== 4 || !!busy}>Open and compare</button>
       </form>
       {problem && <p className="error inline" role="alert">{problem}</p>}
+      <History state={state} onLoaded={onLoaded} />
       <details className="dev-mode">
         <summary>Developer mode</summary>
         <p>Everything on this page can also be run from a terminal, for scripts and pipelines. Compare two releases: <code>python3 -m control_tower compare TRUSTED NEW --out findings.json</code>. Open an envelope: <code>python3 -m control_tower envelope 07 amber falcon river quartz</code>. The README has the rest.</p>

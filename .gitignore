@@ -18,3 +18,4 @@ scorecard-out/
 *.reviews.json
 control-tower.settings.json
 audit-report.html
+control-tower.history.json
