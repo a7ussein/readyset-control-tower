@@ -146,7 +146,12 @@ class Handler(BaseHTTPRequestHandler):
 
     def _local_only(self):
         origin = self.headers.get("Origin")
-        if origin and urlsplit(origin).hostname not in ("localhost", "127.0.0.1"):
+        allowed = {"localhost", "127.0.0.1"}
+        # In a GitHub Codespace the page is reached through that codespace's own forwarded address, and nowhere else.
+        name, domain = os.environ.get("CODESPACE_NAME"), os.environ.get("GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN")
+        if name and domain:
+            allowed.add(f"{name}-{self.server.server_address[1]}.{domain}")
+        if origin and urlsplit(origin).hostname not in allowed:
             self._json(403, {"detail": "this can only be done from this computer"})
             return False
         return True

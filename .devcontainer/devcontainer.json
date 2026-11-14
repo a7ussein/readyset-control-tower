@@ -1,0 +1,9 @@
+{
+  "name": "ReadySet Control Tower",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "forwardPorts": [8010],
+  "portsAttributes": {
+    "8010": { "label": "ReadySet Control Tower", "onAutoForward": "openPreview" }
+  },
+  "postAttachCommand": "python3 -m control_tower serve --no-open"
+}
