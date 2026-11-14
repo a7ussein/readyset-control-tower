@@ -2,6 +2,22 @@
 
 Team **Automyte** · OncoSys Cancer AI Lab, Nov 11–14 2026 · Track: Cohort Firewall · Product: Cohort Control Tower
 
+## Start here: see it running in one minute
+
+[![Download the tool as a ZIP file](https://img.shields.io/badge/Download_the_tool-ZIP_file-3B2F8F?style=for-the-badge)](https://github.com/a7ussein/readyset-control-tower/archive/refs/heads/main.zip)
+
+1. Click the button above, then unzip the file. You get a folder called `readyset-control-tower-main`.
+2. Start it:
+   - **Windows:** open the folder and double-click `run.bat`.
+   - **Mac or Linux:** open Terminal, type `cd ` (with a space after it), drag the folder onto the Terminal window, press Enter, then type `./run.sh` and press Enter.
+3. Your browser opens the page at http://localhost:8010 with a worked example. To stop, close the Terminal or Command Prompt window.
+
+The only thing it needs is Python 3.9 or newer ([download Python](https://www.python.org/downloads/)). There is nothing else to install and no account to make. The example uses invented data; comparing real releases is covered under [Setup and run](#setup-and-run).
+
+**What you are looking at:** when a research dataset gets a new release, this page answers one question: is the new release safe for the result you rely on? It shows what changed, why each change matters, what to do next, and what the tool cannot tell you.
+
+---
+
 **User:** a research engineer responsible for a dataset that gets new releases.
 
 **The one workflow:** point the tool at two releases of the TCGA breast cancer data. It finds what silently changed
