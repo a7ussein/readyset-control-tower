@@ -31,17 +31,70 @@ class Unreadable(Exception):
 
 
 def path_of(folder, name):
-    p = os.path.join(folder, name)
-    return p if os.path.isfile(p) else None
+    """Where a release's file is in a folder. A packed file may have been unpacked by whoever edited it, so
+    `x.tsv` stands in for `x.tsv.gz`; when both are there, the one changed most recently is the one meant."""
+    found = [p for p in ([os.path.join(folder, name)] + ([os.path.join(folder, name[:-3])] if name.endswith(".gz") else []))
+             if os.path.isfile(p)]
+    return max(found, key=os.path.getmtime) if found else None
+
+
+def _is_gzip(path):
+    """Decided by the file's first two bytes, not its name: a file may have been unpacked, or packed, and kept its name."""
+    try:
+        with open(path, "rb") as fh:
+            return fh.read(2) == b"\x1f\x8b"
+    except OSError:
+        return False
 
 
 def _open_bytes(path):
-    return gzip.open(path, "rb") if path.endswith(".gz") else open(path, "rb")
+    return gzip.open(path, "rb") if _is_gzip(path) else open(path, "rb")
+
+
+_sniffed = {}
+
+
+def _encoding(path):
+    """How the file's text is encoded. A table that went through a spreadsheet or an editor is often no longer UTF-8;
+    it is still a table, so it is read as what it is. A file that is not text at all is refused in plain words."""
+    try:
+        key = (path, os.path.getmtime(path), os.path.getsize(path))
+    except OSError:
+        key = (path, 0, 0)
+    if key in _sniffed:
+        return _sniffed[key]
+    name = os.path.basename(path)
+    try:
+        with _open_bytes(path) as fh:
+            head = fh.read(4 << 20)
+    except (OSError, EOFError) as e:
+        raise Unreadable(f"{name} could not be read: {e}")
+    if head[:4] == b"PK\x03\x04":
+        raise Unreadable(f"{name} is not a text table: it is an Excel workbook or a zip saved under this name. "
+                         f"Save it from the spreadsheet as tab-separated text and give that file")
+    if head[:2] in (b"\xff\xfe", b"\xfe\xff"):
+        found = "utf-16"
+    elif head[:3] == b"\xef\xbb\xbf":
+        found = "utf-8-sig"
+    elif b"\x00" in head[:4096]:
+        raise Unreadable(f"{name} is not a text table: it holds binary data. Give the tab-separated text file")
+    else:
+        try:
+            head.decode("utf-8")
+            found = "utf-8"
+        except UnicodeDecodeError as e:
+            # A cut in the middle of a character at the very end of the sample is not a wrong encoding.
+            found = "utf-8" if e.start >= len(head) - 4 and len(head) == 4 << 20 else "cp1252"
+    _sniffed[key] = found
+    return found
 
 
 def _open_text(path):
-    return gzip.open(path, "rt", newline="", encoding="utf-8") if path.endswith(".gz") \
-        else open(path, "r", newline="", encoding="utf-8")
+    encoding = _encoding(path)
+    errors = "strict" if encoding.startswith("utf-8") else "replace"
+    if _is_gzip(path):
+        return gzip.open(path, "rt", newline="", encoding=encoding, errors=errors)
+    return open(path, "r", newline="", encoding=encoding, errors=errors)
 
 
 def content_hash(path):
@@ -85,6 +138,8 @@ def layout(path):
     if first and is_sample_id(first[0]):
         return "row"
     if first is None:
+        if len(header) < 2:
+            raise Unreadable(f"{os.path.basename(path)} holds no table: one line of text with no columns")
         return None                 # a header and no data lines: the header alone does not say which way round it is
     raise Unreadable(f"{os.path.basename(path)}: no TCGA sample ids in the header or the first column")
 

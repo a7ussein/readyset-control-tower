@@ -686,11 +686,24 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
   // Files are collected, not sent: a release is usually several files, and the two sides may hold files of the same name.
   const adder = (set: (change: (old: Staged) => Staged) => void) => (files: File[], name: string) => {
     const isZip = (f: File) => f.name.toLowerCase().endsWith('.zip')
-    const wanted = files.filter(f => state.files.includes(f.name) || isZip(f))
-    const left = files.filter(f => !wanted.includes(f)).map(f => f.name)
+    // A packed file that someone unpacked to edit keeps its place: x.tsv stands in for x.tsv.gz.
+    const proper = (n: string) => (state.files.includes(n) ? n : state.files.includes(`${n}.gz`) ? `${n}.gz` : '')
+    const byName = new Map<string, File>()
+    const both: string[] = []
+    for (const f of files) {
+      if (isZip(f)) { byName.set(f.name, f); continue }
+      const n = proper(f.name)
+      if (!n) continue
+      const had = byName.get(n)
+      if (had) both.push(n)
+      if (!had || f.lastModified >= had.lastModified) byName.set(n, f.name === n ? f : new File([f], n, { type: f.type, lastModified: f.lastModified }))
+    }
+    const wanted = [...byName.values()]
+    const left = files.filter(f => !isZip(f) && !proper(f.name)).map(f => f.name).filter(n => !n.startsWith('.'))
     setProblem(left.length && wanted.length === 0
       ? `None of those is one of a release's files. A release's files are named ${state.files.join(', ')}, or give a zip of them.`
-      : left.length ? `Left out, because ${left.length === 1 ? 'it is not one' : 'they are not'} of a release's files: ${left.slice(0, 6).join(', ')}.` : '')
+      : [left.length ? `Left out, because ${left.length === 1 ? 'it is not one' : 'they are not'} of a release's files: ${left.slice(0, 6).join(', ')}.` : '',
+         both.length ? `Both a packed and an unpacked copy of ${both.join(', ')} were there. The one changed most recently was used.` : ''].filter(Boolean).join(' '))
     if (wanted.length === 0) return
     set(old => {
       const zipped = wanted.find(isZip)

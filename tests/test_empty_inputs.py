@@ -1,5 +1,6 @@
 """An empty file, a file with only its header, and an empty row must each give an answer, never a crash."""
 import gzip
+import json
 import os
 import tempfile
 import unittest
@@ -78,6 +79,41 @@ class EmptyInputs(unittest.TestCase):
         doc = self.changed(CLINICAL, blank)
         self.assertTrue(doc["findings"])
         self.assertEqual({f["kind"] for f in doc["findings"]}, {"missing_data"})
+
+    def test_a_table_saved_by_another_program_is_still_read(self):
+        # Spreadsheets and editors re-save text in other encodings, and files get packed or unpacked under the same name.
+        def as_bytes(encode):
+            def change(folder, file):
+                path = os.path.join(folder, file)
+                with (gzip.open(path, "rb") if path.endswith(".gz") else open(path, "rb")) as fh:
+                    raw = fh.read()
+                with open(path, "wb") as fh:
+                    fh.write(encode(raw))
+            return change
+        cases = {"Windows-1252": (CLINICAL, lambda raw: raw.decode("utf-8").encode("cp1252")),
+                 "UTF-16": (CLINICAL, lambda raw: raw.decode("utf-8").encode("utf-16")),
+                 "UTF-8 with a byte-order mark": (CLINICAL, lambda raw: b"\xef\xbb\xbf" + raw),
+                 "packed under a plain name": (CLINICAL, gzip.compress),
+                 "unpacked under a .gz name": (PROTEIN, lambda raw: raw)}
+        for name, (file, encode) in cases.items():
+            d = tempfile.mkdtemp()
+            a = TinyRelease()
+            folder_a, folder_b = a.write(os.path.join(d, "A")), a.copy().write(os.path.join(d, "B"))
+            as_bytes(encode)(folder_b, file)
+            doc = compare(folder_a, folder_b)
+            self.assertEqual((doc["verdict"], doc["findings"]), ("Ready", []), name)
+
+    def test_a_file_that_is_not_text_is_refused_in_plain_words(self):
+        import zipfile
+        d = tempfile.mkdtemp()
+        a = TinyRelease()
+        folder_a, folder_b = a.write(os.path.join(d, "A")), a.copy().write(os.path.join(d, "B"))
+        with zipfile.ZipFile(os.path.join(folder_b, CLINICAL), "w") as z:      # a workbook saved under the table's name
+            z.writestr("xl/workbook.xml", "<workbook/>")
+        doc = compare(folder_a, folder_b)
+        self.assertEqual(doc["verdict"], "Insufficient Evidence")
+        self.assertIn("Excel workbook or a zip", doc["findings"][0]["summary"])
+        self.assertNotIn("codec", json.dumps(doc))                              # no programmer's error text reaches the page
 
 
 if __name__ == "__main__":
