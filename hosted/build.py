@@ -36,7 +36,7 @@ shutil.copytree(os.path.join(here, "recorded"), os.path.join(out, "data"))
 shutil.copytree(os.path.join(here, "api"), os.path.join(out, "api"))
 package = os.path.join(out, "py", "control_tower")
 os.makedirs(package)
-for name in ("report.py", "ask.py", "changelog.py", "understand_ai.py"):
+for name in ("report.py", "ask.py", "changelog.py", "understand_ai.py", "voice.py"):
     shutil.copy(os.path.join(root, "control_tower", name), package)
 with open(os.path.join(package, "__init__.py"), "w", encoding="utf-8") as fh:
     fh.write('"""ReadySet Control Tower: the report, change log and assistant code, as run by the online demo."""\n')

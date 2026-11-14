@@ -13,6 +13,8 @@
   const understood = {}                     // one reading per wording, so asking again never changes it
   let modelCheck
   const serverModel = () => (modelCheck ??= realFetch(new URL('api/understand', here)).then(r => (r.ok ? r.json() : {})).then(j => j.available === true).catch(() => false))
+  let voiceCheck
+  const serverVoice = () => (voiceCheck ??= realFetch(new URL('api/speak', here)).then(r => (r.ok ? r.json() : {})).then(j => j.available === true).catch(() => false))
   const texts = {}
   const load = name => (texts[name] ??= realFetch(new URL(name, here)).then(r => { if (!r.ok) throw new Error(name); return r.text() }))
   const json = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -65,7 +67,8 @@
     const path = url.pathname.slice(url.pathname.indexOf('/api/'))
     const method = ((init && init.method) || 'GET').toUpperCase()
     if (path === '/api/health') return json(200, { status: 'ok', service: 'readyset-control-tower', demo: true })
-    if (path === '/api/state') return json(200, { ...JSON.parse(await load('data/state.json')), ...(await serverModel() ? { ai_understanding: "an AI model on the team's server" } : {}) })
+    if (path === '/api/state') return json(200, { ...JSON.parse(await load('data/state.json')), ...(await serverModel() ? { ai_understanding: "an AI model on the team's server" } : {}), voice: await serverVoice() })
+    if (path === '/api/speak' && method === 'POST') return realFetch(new URL('api/speak', here), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: init.body })
     if (path === '/api/history') return json(200, { comparisons: [] })
     if (path === '/api/findings') {
       const doc = await findings(url.searchParams.get('for'))

@@ -32,7 +32,7 @@ export async function saveReview(review: { key: string; status: 'confirmed' | 'd
   } catch { return false }
 }
 
-export interface ReleaseState { trusted: string | null; new: string | null; trusted_name: string | null; new_name: string | null; files: string[]; ai_understanding?: string }
+export interface ReleaseState { trusted: string | null; new: string | null; trusted_name: string | null; new_name: string | null; files: string[]; ai_understanding?: string; voice?: boolean }
 
 async function answer(response: Response): Promise<ReleaseState> {
   const body = await response.json().catch(() => ({}))
@@ -117,4 +117,12 @@ export interface PastComparison {
 export async function pastComparisons(): Promise<PastComparison[]> {
   if (usingExample) return []
   try { return (await json<{ comparisons: PastComparison[] }>(await fetch(`${base}/api/history`))).comparisons ?? [] } catch { return [] }
+}
+
+/** An answer read aloud in a natural voice, as a playable address. Null when the tool has no voice key. */
+export async function spokenAudio(text: string): Promise<string | null> {
+  try {
+    const response = await fetch(`${base}/api/speak`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ text }) })
+    return response.ok ? URL.createObjectURL(await response.blob()) : null
+  } catch { return null }
 }

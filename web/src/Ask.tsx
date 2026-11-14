@@ -2,7 +2,7 @@
 // findings by fixed patterns. No language model. Every answer shows how it was reached and a fingerprint that is
 // the same every time the same question is asked of the same findings.
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { askQuestion, saveReview, setModelKey, type AskReply } from './api'
+import { askQuestion, saveReview, setModelKey, spokenAudio, type AskReply } from './api'
 
 const STARTERS = ['Can I use the new release?', 'Why does it matter for my results?', 'What should I do next?',
   'What can the tool not tell me?', 'Will you give the same answer next time?']
@@ -12,7 +12,7 @@ const remember = (key: string, value: string) => { try { localStorage.setItem(ke
 interface Turn { id: number; q: string; reply?: AskReply; problem?: string; recorded?: 'yes' | 'failed'; checking?: boolean }
 type Listener = { start: () => void; stop: () => void; onresult: ((e: { results: { [i: number]: { [j: number]: { transcript: string } } } }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null; lang: string; interimResults: boolean }
 
-export function Ask({ asked, onChanged, canUseModel, offerKey }: { asked?: string[]; onChanged: () => void; canUseModel?: string; offerKey?: boolean }) {
+export function Ask({ asked, onChanged, canUseModel, offerKey, voice }: { asked?: string[]; onChanged: () => void; canUseModel?: string; offerKey?: boolean; voice?: boolean }) {
   const [open, setOpen] = useState(false)
   const [turns, setTurns] = useState<Turn[]>([])
   const [text, setText] = useState('')
@@ -33,11 +33,19 @@ export function Ask({ asked, onChanged, canUseModel, offerKey }: { asked?: strin
   const next = useRef(1)
   const end = useRef<HTMLDivElement>(null)
   const heard = useRef<Listener | null>(null)
+  const player = useRef<HTMLAudioElement | null>(null)
+  const quiet = () => { player.current?.pause(); player.current = null; if (typeof window.speechSynthesis !== 'undefined') window.speechSynthesis.cancel() }
+  const say = async (words: string) => {
+    quiet()
+    const address = voice ? await spokenAudio(words) : null
+    if (address) { const a = new Audio(address); player.current = a; a.onended = () => URL.revokeObjectURL(address); void a.play().catch(() => {}) }
+    else if (typeof window.speechSynthesis !== 'undefined') window.speechSynthesis.speak(new SpeechSynthesisUtterance(words))
+  }
   const Recognition = (window as unknown as Record<string, unknown>).SpeechRecognition ?? (window as unknown as Record<string, unknown>).webkitSpeechRecognition
   const canSpeak = typeof window.speechSynthesis !== 'undefined'
 
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }) }, [turns, open])
-  useEffect(() => { if (!open && canSpeak) window.speechSynthesis.cancel() }, [open, canSpeak])
+  useEffect(() => { if (!open) quiet() }, [open])   // eslint-disable-line react-hooks/exhaustive-deps
   const patch = (id: number, change: Partial<Turn>) => setTurns(all => all.map(t => (t.id === id ? { ...t, ...change } : t)))
   const body = (q: string) => ({ q, for: asked?.join(','), name: name.trim(), role: role.trim(), ai: model && !!how })
 
@@ -50,7 +58,7 @@ export function Ask({ asked, onChanged, canUseModel, offerKey }: { asked?: strin
     try {
       const reply = await askQuestion(body(q))
       patch(id, { reply })
-      if (aloud && canSpeak) { window.speechSynthesis.cancel(); window.speechSynthesis.speak(new SpeechSynthesisUtterance(reply.answer.slice(0, 3).join(' '))) }
+      if (aloud) void say(reply.answer.slice(0, 2).join(' '))
     } catch (e) { patch(id, { problem: e instanceof Error ? e.message : 'The question could not be answered.' }) }
   }
   const submit = (e: FormEvent) => { e.preventDefault(); void ask(text) }
@@ -170,7 +178,7 @@ export function Ask({ asked, onChanged, canUseModel, offerKey }: { asked?: strin
         )}
         <button type="submit" className="primary" disabled={!text.trim()}>Ask</button>
       </form>
-      {canSpeak && <label className="ask-aloud"><input id="ask-aloud" type="checkbox" checked={aloud} onChange={e => setAloud(e.target.checked)} /> Read answers aloud</label>}
+      {(canSpeak || voice) && <label className="ask-aloud"><input id="ask-aloud" type="checkbox" checked={aloud} onChange={e => { setAloud(e.target.checked); if (!e.target.checked) quiet() }} /> Read answers aloud{voice ? ' (a natural voice; the words of the answer are sent to ElevenLabs to make it)' : ''}</label>}
       {how && <label className="ask-aloud" title="When my word list does not recognise your wording, a language model is asked which of my fixed questions you mean. It is sent only your question, never the data, and it writes none of the answer."><input id="ask-model" type="checkbox" checked={model} onChange={e => setModel(e.target.checked)} /> Understand any wording with {how} (it gets only your question, never the data)</label>}
       {offerKey && !how.startsWith('your own') && (
         <details className="ask-key">

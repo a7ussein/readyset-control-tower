@@ -256,8 +256,8 @@ class Handler(BaseHTTPRequestHandler):
     def _state(self):
         srv = self.server
         trusted, new = srv.releases or (None, None)
-        from . import understand_ai
-        return {"trusted": trusted, "new": new, "files": list(FILES), "ai_understanding": understand_ai.available(getattr(self.server, "model_key", None)),
+        from . import understand_ai, voice
+        return {"trusted": trusted, "new": new, "files": list(FILES), "voice": voice.available(), "ai_understanding": understand_ai.available(getattr(self.server, "model_key", None)),
                 "trusted_name": _label(trusted) if trusted else None,
                 "new_name": _label(new) if new else None}
 
@@ -417,6 +417,22 @@ class Handler(BaseHTTPRequestHandler):
             self.server.router = None
         self._json(200, {"ai_understanding": understand_ai.available(self.server.model_key)})
 
+    def _speak(self):
+        """Read an answer aloud in a natural voice: {"text": "..."} -> MP3. Only when ELEVENLABS_API_KEY is set."""
+        from . import voice
+        if not voice.available():
+            return self._json(503, {"detail": "no voice key is set"})
+        try:
+            text = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 8000)) or b"{}")["text"]
+            if not isinstance(text, str) or not text.strip():
+                raise ValueError
+            audio = voice.speak(text)
+        except (ValueError, KeyError, TypeError):
+            return self._json(400, {"detail": "expected some text"})
+        except OSError:
+            return self._json(502, {"detail": "the voice service did not answer"})
+        self._send(200, audio, "audio/mpeg")
+
     def _envelope(self):
         """Open a sealed envelope from the page: {"number": "07", "words": ["amber", "falcon", "river", "quartz"]}."""
         from .envelope import CannotOpen, open_envelope
@@ -446,12 +462,14 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             parts = urlsplit(self.path)
-            if parts.path in ("/api/upload", "/api/release", "/api/question", "/api/envelope", "/api/model-key") and not self._local_only():
+            if parts.path in ("/api/upload", "/api/release", "/api/question", "/api/envelope", "/api/model-key", "/api/speak") and not self._local_only():
                 return
             if parts.path == "/api/envelope":
                 return self._envelope()
             if parts.path == "/api/model-key":
                 return self._model_key()
+            if parts.path == "/api/speak":
+                return self._speak()
             if parts.path == "/api/question":
                 return self._add_question()
             if parts.path == "/api/upload":
