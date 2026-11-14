@@ -19,3 +19,5 @@ scorecard-out/
 control-tower.settings.json
 audit-report.html
 control-tower.history.json
+hosted/out/
+hosted/.vercel-link/
