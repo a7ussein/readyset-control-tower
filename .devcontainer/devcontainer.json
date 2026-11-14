@@ -5,5 +5,5 @@
   "portsAttributes": {
     "8010": { "label": "ReadySet Control Tower", "onAutoForward": "openPreview" }
   },
-  "postAttachCommand": "python3 -m control_tower serve --no-open"
+  "postStartCommand": "nohup python3 -m control_tower serve --no-open > /tmp/control-tower.log 2>&1 &"
 }
