@@ -21,7 +21,7 @@ Team **Automyte** · OncoSys Cancer AI Lab, Nov 11–14 2026 · Track: Cohort Fi
 
 The only thing it needs is Python 3.9 or newer ([download Python](https://www.python.org/downloads/)). There is nothing else to install and no account to make. The example uses invented data; comparing real releases is covered under [Developer mode](#developer-mode-setup-and-the-command-line).
 
-**What you are looking at:** when a research dataset gets a new release, this page answers one question: is the new release safe for the result you rely on? It shows what changed, why each change matters, what to do next, and what the tool cannot tell you.
+**What you are looking at:** when a research dataset gets a new release, this page answers one question: does the result you rely on still hold on the new release? It shows what changed, why each change matters, what to do next, and what the tool cannot tell you.
 
 ---
 

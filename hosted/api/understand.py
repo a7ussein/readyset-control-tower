@@ -37,7 +37,7 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         global _router
         origin, host = self.headers.get("Origin"), self.headers.get("Host")
-        if origin and host and origin.split("://", 1)[-1] != host:
+        if not origin or not host or origin.split("://", 1)[-1] != host:      # only the demo page itself may spend the key
             return self._send(403, {"detail": "this is only for the demo page itself"})
         if not os.environ.get("ANTHROPIC_API_KEY"):
             return self._send(503, {"detail": "no key is set on the server"})

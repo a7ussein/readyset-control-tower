@@ -33,7 +33,7 @@ class handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         origin, host = self.headers.get("Origin"), self.headers.get("Host")
-        if origin and host and origin.split("://", 1)[-1] != host:
+        if not origin or not host or origin.split("://", 1)[-1] != host:      # only the demo page itself may spend the key
             return self._json(403, {"detail": "this is only for the demo page itself"})
         if not voice.available():
             return self._json(503, {"detail": "no voice key is set on the server"})
