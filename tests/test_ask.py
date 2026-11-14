@@ -96,6 +96,18 @@ class Ask(unittest.TestCase):
         self.assertFalse(ask(self.doc, odd, router=broken)["can_answer"])               # no network: it says it cannot answer
         self.assertEqual(ask(self.doc, "will this patient survive", router=router)["intent"], "clinical")
 
+    def test_so_what_and_why_trust_it_are_answered_from_the_proof(self):
+        so = ask(self.doc, "so what?")
+        self.assertEqual(so["intent"], "matters")
+        self.assertEqual(so["answer"], ask(self.doc, "why does it matter for my results")["answer"])
+        trust = ask(self.doc, "why should I trust this?")
+        self.assertEqual(trust["intent"], "trust")
+        told = " ".join(trust["answer"])
+        for part in ("Do not take it on trust", PROTEIN, P1, "identical byte for byte", "what it cannot tell you"):
+            self.assertIn(part, told)
+        self.assertEqual(ask(self.doc, "can you prove it")["intent"], "trust")
+        self.assertEqual(consistency(self.doc, "why should I trust this?", 100)["different_answers"], 1)
+
     def test_understanding_a_question_uses_no_randomness(self):
         self.assertEqual({understand("why is it rated high?")[0] for _ in range(50)}, {"severity"})
 

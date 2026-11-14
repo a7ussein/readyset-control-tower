@@ -333,6 +333,18 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step, waiti
         <p className="eyebrow">Change {index + 1} of {total} <span className="ref">{finding.id}</span>{' '}<span className="sev">{KIND[finding.kind] ?? words(finding.kind)}</span>{' '}<span className={`sev sev-${text(finding.severity)}`}>{text(finding.severity, 'unrated')} severity</span></p>
         <h2>{titleOf(finding)}</h2>
         <p className="lede">{text(finding.summary)}</p>
+        {(() => {
+          // "So what?": the consequence for the person's own results, in one line, built from the findings.
+          const hit = affected.map(id => ({ id, e: own(id) })).filter(x => x.e)
+          const first = hit[0]
+          const urgency = repairs.map(r => doc.priority[text(r.id)]?.level).find(Boolean)
+          const consequence = affected.length === 0
+            ? 'Nothing, for the analyses you chose: none of them reads what changed here. It is still a real change in the data.'
+            : first
+              ? `${first.id} (${doc.titles[first.id] ?? 'your analysis'}) gives a different answer: on its own this change moves its ${words(first.e?.measure) || 'result'} by ${percent(first.e?.moved_by)}.`
+              : `It reaches ${affected.join(' and ')}, which ${affected.length === 1 ? 'reads' : 'read'} what changed here.`
+          return <p className="so-what"><strong>So what?</strong> {consequence}{affected.length > 0 && urgency ? ` Deal with it ${urgency === 'before use' ? 'before you use this release' : `(${urgency})`}.` : ''}</p>
+        })()}
       </header>
 
       <div className="panel-grid">

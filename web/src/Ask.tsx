@@ -5,8 +5,8 @@ import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { showData } from './DataView'
 import { askQuestion, saveReview, setModelKey, spokenAudio, type AskReply } from './api'
 
-const STARTERS = ['Can I use the new release?', 'Why does it matter for my results?', 'What should I do next?',
-  'What can the tool not tell me?', 'Will you give the same answer next time?']
+const STARTERS = ['Can I use the new release?', 'So what? Why does it matter?', 'What should I do next?',
+  'What can the tool not tell me?', 'Why should I trust this?']
 const remembered = (key: string) => { try { return localStorage.getItem(key) ?? '' } catch { return '' } }
 const remember = (key: string, value: string) => { try { localStorage.setItem(key, value) } catch { /* not kept */ } }
 

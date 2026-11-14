@@ -43,6 +43,9 @@ INTENTS = [
     ("how", "How do you work, and will you give the same answer next time?",
      {"how": 1, "work": 2, "method": 3, "detect": 3, "ai": 4, "model": 3, "llm": 4, "consisten": 4, "same": 2, "determin": 4,
       "hallucinat": 4, "chatgpt": 4, "gpt": 4, "agent": 3, "reproduc": 4, "again": 2, "fingerprint": 3}),
+    ("trust", "Why should I trust this?",
+     {"trust": 5, "believe": 4, "proof": 4, "prove": 4, "verify": 4, "reliable": 4, "accura": 4, "evidence": 3, "check": 2,
+      "trace": 4, "traceab": 5, "audit": 3, "correct": 2, "wrong": 1}),
     ("files", "Which files were compared?",
      {"file": 4, "compared": 2, "rna": 3, "hash": 3, "checksum": 3, "data": 1, "opened": 2}),
 ]
@@ -88,6 +91,8 @@ def understand(text):
     clinical = sorted({w for w in typed if any(w == c or (len(c) > 3 and w.startswith(c)) for c in CLINICAL)})
     if clinical:
         return "clinical", clinical, scores
+    if "so what" in str(text or "").lower():
+        return "matters", ["so", "what"], scores
     best = max(scores.values()) if scores else 0
     if best < 2:
         return None, [], scores
@@ -336,6 +341,33 @@ def ask(doc, text, actor=None, router=None):
         answer += [f"{_name(f)} was found like this: {((x.get('rules') or {}).get(f.get('id')) or {}).get('detected_by')}"
                    for f in (named_f or []) if ((x.get("rules") or {}).get(f.get("id")) or {}).get("detected_by")]
         read = ["x_readyset.rules (detected_by)"]
+
+    elif intent == "trust":
+        files = [f for f in x.get("files", []) if isinstance(f, dict)]
+        same = [f.get("file") for f in files if f.get("status") == "unchanged"]
+        answer.append("Do not take it on trust. Everything here can be checked, and this is how.")
+        for f in about:
+            w = (x.get("witness") or {}).get(f.get("id")) or {}
+            v = next((v for v in w.get("values", []) if isinstance(v, dict) and v.get("before") != v.get("after")), None)
+            if v and w.get("releases"):
+                answer.append(f"{_name(f)}: open the two files and look. In {w.get('file')}, row {w.get('row')}, sample {v.get('sample')} "
+                              f"reads {shown(v.get('before'))} in {w['releases'][0]} and {shown(v.get('after'))} in {w['releases'][-1]}. "
+                              f"Press \"See the data in both files\" to read every row side by side.")
+            else:
+                answer.append(f"{_name(f)}: it names its file ({_file(f)}) and its samples, so you can open them yourself.")
+        if files:
+            answer.append(f"Every file was read in full in both releases. {plural(len(same), 'file')} of {len(files)} "
+                          f"{'is' if len(same) == 1 else 'are'} identical byte for byte; the fingerprint of each file is in the report, "
+                          f"so anyone can recompute it.")
+        answer.append("Results are rerun, not estimated: for each analysis a change touches, the number before and the number after "
+                      "are both shown.")
+        answer.append("The same question about the same findings gives the same answer, word for word: the fingerprint under each "
+                      "answer does not change when you ask again. No language model writes any finding or answer.")
+        answer.append("Every decision is on the record: who confirmed or dismissed each change, in what role, and when; and the "
+                      "report names who produced it.")
+        answer.append("And it says what it cannot tell you, on every change, instead of guessing.")
+        read = ["x_readyset.witness", "x_readyset.files", "data.releases (content hashes)", "analyses (before, after)", "x_readyset.reviews"]
+        sources = [_source(f, x) for f in about]
 
     elif intent == "files":
         label = {"changed": "content differs", "unchanged": "identical: every byte was read and matches", "absent": "in neither release",
