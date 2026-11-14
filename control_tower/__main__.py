@@ -5,10 +5,11 @@
         --report     also write the audit report: the same findings in plain English, as one page to open or print
         --for        the question: which registered analyses this release is needed for (default: all of them)
         --question   a JSON file listing analyses, registered ids or new ones (docs/OUTPUT-CONTRACT.md, "The question")
-        exit code: 0 Ready, 1 Conditional, 2 Blocked, 3 Insufficient Evidence
+        exit code: 0 Ready, 1 Conditional, 2 Blocked, 3 Insufficient Evidence; 64 the command was wrong
   python3 -m control_tower envelope NUMBER WORD WORD WORD WORD [--challenge PATH] [--port N]
         Saturday in one step: open the organisers' sealed envelope with their unseal.py, compare its release with the
         trusted one, write findings.json and audit-report.html, and show it on the page if the page is running
+        exit code: the verdict's, as for compare; 70 the envelope did not open, so there is no answer
   python3 -m control_tower serve RELEASE_A RELEASE_B [--question FILE] [--port N] [--no-open]
         the page at http://localhost:8010, comparing the two folders live; the question can be changed on the page
   python3 -m control_tower serve [--findings FILE] [--port N] [--no-open]
@@ -19,6 +20,7 @@ import os
 import sys
 
 EXIT = {"Ready": 0, "Conditional": 1, "Blocked": 2, "Insufficient Evidence": 3}
+NO_ANSWER = 70          # the envelope did not open: never one of the verdict codes, so a script cannot mistake it for an answer
 
 
 def load_question(path):
@@ -153,6 +155,10 @@ def cmd_envelope(args):
               "Say where it is:  --challenge PATH/TO/oncosys-hackathon-challenge", file=sys.stderr)
         return 64
     trusted = os.path.join(repo, "data", "tcga-brca", "raw")
+    if not os.path.isdir(trusted):
+        print(f"error: the trusted release is not at {trusted}.\n"
+              "Download it first, in the organisers' repository:  python data/tcga-brca/fetch.py", file=sys.stderr)
+        return NO_ANSWER
     venv = os.path.join(repo, ".venv", "Scripts" if os.name == "nt" else "bin", "python.exe" if os.name == "nt" else "python")
     if os.path.isfile(venv):
         python = [venv]
@@ -165,14 +171,16 @@ def cmd_envelope(args):
               for d in (os.listdir(os.path.join(repo, "envelopes", "opened")) if os.path.isdir(os.path.join(repo, "envelopes", "opened")) else [])}
     opened = subprocess.run(python + [os.path.join("envelopes", "unseal.py")] + args, cwd=repo)
     if opened.returncode != 0:
-        print("\nThe envelope did not open. Check the number and the four words, then run this again.", file=sys.stderr)
-        return opened.returncode or 1
+        print("\nThe envelope did not open, so nothing was compared. The organisers' script says why, just above.\n"
+              "If it says the code is wrong, check the number and the four words. Otherwise do what it asks, then run this again.",
+              file=sys.stderr)
+        return NO_ANSWER
     root = os.path.join(repo, "envelopes", "opened")
     folders = sorted((d for d in os.listdir(root) if os.path.isdir(os.path.join(root, d, "release"))),
                      key=lambda d: (os.path.getmtime(os.path.join(root, d)) > before.get(d, 0), os.path.getmtime(os.path.join(root, d))))
     if not folders:
         print("error: the envelope opened but holds no release folder", file=sys.stderr)
-        return 1
+        return NO_ANSWER
     new = os.path.join(root, folders[-1], "release")
     code = cmd_compare([trusted, new, "--out", "findings.json", "--report", "audit-report.html"])
     try:

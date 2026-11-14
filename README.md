@@ -37,7 +37,7 @@ If port 8010 is busy, pick another: `./run.sh serve --port 8123`.
 
 The event data is fetched with the organisers' `fetch.py` from their challenge repository (https://github.com/disleveK/oncosys-hackathon-challenge). No data files are committed to this repository.
 
-Get the data and the practice release, in a folder next to this one (not inside it). Starting from this repository's folder: The organisers' scripts need pandas and jsonschema, installed here in a virtual environment; our tool needs neither.
+Get the data and the practice release, in a folder next to this one (not inside it). The organisers' scripts need pandas, jsonschema and cryptography, installed below in a virtual environment; our tool needs none of them. If you already have their repository, run `git pull` in it first: their Windows fix for `make_release.py` (line endings) landed on 12 November. Starting from this repository's folder:
 
 ```bash
 cd ..
@@ -45,7 +45,7 @@ git clone https://github.com/disleveK/oncosys-hackathon-challenge.git
 cd oncosys-hackathon-challenge
 python3 -m venv .venv
 source .venv/bin/activate                  # Windows: .venv\Scripts\activate
-pip install pandas jsonschema
+pip install pandas jsonschema cryptography  # cryptography is for envelopes/unseal.py
 python data/tcga-brca/fetch.py             # the trusted release, into data/tcga-brca/raw/, checksums verified
 python data/tcga-brca/make_release.py      # practice release B, into data/tcga-brca/releases/practice-B/
 cd ../readyset-control-tower               # back to this repository; keep the virtual environment active
@@ -61,6 +61,8 @@ Once you have the releases, compare them (the trusted release first):
 # Compare two releases, from this repository's folder (RELEASE_A is the trusted one):
 D=../oncosys-hackathon-challenge/data/tcga-brca
 python3 -m control_tower compare $D/raw $D/releases/practice-B --out findings.json
+# Windows (PowerShell) has no D=...; write the paths out:
+#   python -m control_tower compare ..\oncosys-hackathon-challenge\data\tcga-brca\raw ..\oncosys-hackathon-challenge\data\tcga-brca\releases\practice-B --out findings.json
 
 # Check the output with the organisers' validator (needs the virtual environment from above):
 python ../oncosys-hackathon-challenge/format/validate.py findings.json
@@ -84,8 +86,8 @@ python3 -m control_tower envelope practice orange meadow pilot lantern
 ```
 
 It looks for the organisers' repository next to this one; say `--challenge PATH` if it is somewhere else. Their
-`unseal.py` needs `pandas` and `cryptography`: install their requirements in a `.venv` inside their repository, or
-have `uv` installed, and the command finds either.
+`unseal.py` needs `pandas` and `cryptography`: the `.venv` from "Comparing real releases" has both, or have `uv`
+installed, and the command finds either. If the envelope does not open, their script says why and the command exits 70.
 
 An envelope's release has five files and no RNA file. Neither registered analysis reads RNA, so the tool compares the
 other five, says the RNA file was not compared, and raises no finding about it. To do the two steps by hand, run
@@ -118,8 +120,11 @@ when you download `findings.json` from the page.
 
 `compare` prints the verdict, one line per file, each finding and which analyses were rerun. Its exit code is
 0 Ready, 1 Conditional, 2 Blocked, 3 Insufficient Evidence. An exit code of 1 is an answer, not a failure.
+A run that gives no answer never uses those four: 64 means the command was wrong (a missing folder, a bad option),
+and `envelope` exits 70 when the envelope did not open.
 
-`$D` in these commands is only a shortcut for the organisers' data folder, set on the line above it. The trusted
+`$D` in these commands is only a shortcut for the organisers' data folder, set on the line above it (bash and zsh;
+on Windows write the path out). The trusted
 release always goes first and the new one second; the tool cannot tell if you swap them.
 
 Run the tests with `python3 -m unittest discover -s tests -t .`

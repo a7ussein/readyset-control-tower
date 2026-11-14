@@ -59,8 +59,9 @@ class Command(unittest.TestCase):
         run = lambda *args: subprocess.run([sys.executable, "-m", "control_tower", "envelope", *args, "--challenge", repo, "--port", "1"],
                                            capture_output=True, text=True, cwd=work, env=env)
         bad = run("07", "wrong", "words", "entirely", "here")
-        self.assertNotEqual(bad.returncode, 0)
+        self.assertEqual(bad.returncode, 70)                                                  # not 1: that would read as Conditional
         self.assertIn("did not open", bad.stderr)
+        self.assertIn("says why", bad.stderr)                                                 # it does not guess the cause
         p = run("07", "amber", "falcon", "river", "quartz")
         self.assertEqual(p.returncode, 1, p.stderr)                                           # Conditional
         with open(os.path.join(work, "findings.json")) as fh:
@@ -68,6 +69,11 @@ class Command(unittest.TestCase):
         self.assertEqual(([f["kind"] for f in doc["findings"]], doc["data"]["releases"][1]["name"]), (["sample_swap"], "E07"))
         self.assertTrue(os.path.isfile(os.path.join(work, "audit-report.html")))
         self.assertIn("page is not running", p.stdout)
+        os.rename(os.path.join(repo, "data", "tcga-brca", "raw"), os.path.join(repo, "data", "tcga-brca", "moved"))
+        lost = run("07", "amber", "falcon", "river", "quartz")                                # the trusted release is not there
+        self.assertEqual(lost.returncode, 70)
+        self.assertIn("fetch.py", lost.stderr)
+        self.assertNotIn("four words", lost.stderr)
 
     def test_exit_codes_for_the_other_verdicts(self):
         out = os.path.join(self.d, "f.json")
