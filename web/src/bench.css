@@ -296,3 +296,5 @@ article.panel.pointed { outline: 3px solid var(--point); outline-offset: 6px; bo
 @media (max-width: 720px) { .sides { grid-template-columns: minmax(0, 1fr) } }
 
 .report-button { display: flex; flex-direction: column; gap: 8px } .report-who .wide { grid-column: 1 / -1; font-size: 14.5px } .report-as { margin-left: 8px }
+
+.ask-notes { padding: 0 16px 12px; font-size: 12px; color: var(--muted); line-height: 1.45 } .ask-notes .link { font-size: 12px }

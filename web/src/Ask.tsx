@@ -19,28 +19,42 @@ export function Ask({ asked, onChanged, canUseModel, offerKey, voice }: { asked?
   const [text, setText] = useState('')
   const [name, setName] = useState(() => remembered('readyset-reviewer'))
   const [role, setRole] = useState(() => remembered('readyset-role'))
-  const [aloud, setAloud] = useState(false)
-  const [model, setModel] = useState(false)
+  const [muted, setMuted] = useState(false)
+  const [plain, setPlain] = useState(false)          // the browser's own voice is only used when asked for
   const [how, setHow] = useState(canUseModel ?? '')
   const [key, setKey] = useState('')
   const [keyProblem, setKeyProblem] = useState('')
   useEffect(() => { setHow(canUseModel ?? '') }, [canUseModel])
   const useKey = async (e: FormEvent) => {
     e.preventDefault(); setKeyProblem('')
-    try { const r = await setModelKey(key.trim()); setHow(r.ai_understanding); setKey(''); if (r.ai_understanding) setModel(true) }
+    try { const r = await setModelKey(key.trim()); setHow(r.ai_understanding); setKey('') }
     catch (err) { setKeyProblem(err instanceof Error ? err.message : 'The key was not accepted.') }
   }
   const [listening, setListening] = useState(false)
   const next = useRef(1)
   const end = useRef<HTMLDivElement>(null)
   const heard = useRef<Listener | null>(null)
+  // One audio element for the whole panel. Browsers only let a page make sound in answer to a click, so the element
+  // is woken on the click that asks the question, and the voice, which arrives a moment later, plays through it.
   const player = useRef<HTMLAudioElement | null>(null)
-  const quiet = () => { player.current?.pause(); player.current = null; if (typeof window.speechSynthesis !== 'undefined') window.speechSynthesis.cancel() }
+  const woken = useRef(false)
+  const SILENCE = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA='
+  const wake = () => {
+    if (!voice || muted || woken.current) return
+    const a = player.current ?? (player.current = new Audio())
+    a.src = SILENCE
+    void a.play().then(() => { woken.current = true }).catch(() => {})
+  }
+  const quiet = () => { player.current?.pause(); if (typeof window.speechSynthesis !== 'undefined') window.speechSynthesis.cancel() }
   const say = async (words: string) => {
     quiet()
+    const browserVoice = () => { if (typeof window.speechSynthesis !== 'undefined') window.speechSynthesis.speak(new SpeechSynthesisUtterance(words)) }
     const address = voice ? await spokenAudio(words) : null
-    if (address) { const a = new Audio(address); player.current = a; a.onended = () => URL.revokeObjectURL(address); void a.play().catch(() => {}) }
-    else if (typeof window.speechSynthesis !== 'undefined') window.speechSynthesis.speak(new SpeechSynthesisUtterance(words))
+    if (!address) return browserVoice()
+    const a = player.current ?? (player.current = new Audio())
+    a.onended = () => URL.revokeObjectURL(address)
+    a.src = address
+    a.play().catch(browserVoice)                       // if the browser still refuses, its own voice reads the answer
   }
   const Recognition = (window as unknown as Record<string, unknown>).SpeechRecognition ?? (window as unknown as Record<string, unknown>).webkitSpeechRecognition
   const canSpeak = typeof window.speechSynthesis !== 'undefined'
@@ -48,11 +62,13 @@ export function Ask({ asked, onChanged, canUseModel, offerKey, voice }: { asked?
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }) }, [turns, open])
   useEffect(() => { if (!open) quiet() }, [open])   // eslint-disable-line react-hooks/exhaustive-deps
   const patch = (id: number, change: Partial<Turn>) => setTurns(all => all.map(t => (t.id === id ? { ...t, ...change } : t)))
-  const body = (q: string) => ({ q, for: asked?.join(','), name: name.trim(), role: role.trim(), ai: model && !!how })
+  const aloud = voice ? !muted : plain && canSpeak
+  const body = (q: string) => ({ q, for: asked?.join(','), name: name.trim(), role: role.trim(), ai: !!how })
 
   const ask = async (question: string) => {
     const q = question.trim()
     if (!q) return
+    wake()
     const id = next.current++
     setTurns(all => [...all, { id, q }])
     setText('')
@@ -78,6 +94,7 @@ export function Ask({ asked, onChanged, canUseModel, offerKey, voice }: { asked?
   }
   const listen = () => {
     if (listening) { heard.current?.stop(); return }
+    wake()
     const r = new (Recognition as new () => Listener)()
     r.lang = 'en-US'; r.interimResults = false
     r.onresult = e => { const said = e.results[0][0].transcript; setText(said); void ask(said) }
@@ -180,11 +197,16 @@ export function Ask({ asked, onChanged, canUseModel, offerKey, voice }: { asked?
         )}
         <button type="submit" className="primary" disabled={!text.trim()}>Ask</button>
       </form>
-      {(canSpeak || voice) && <label className="ask-aloud"><input id="ask-aloud" type="checkbox" checked={aloud} onChange={e => { setAloud(e.target.checked); if (!e.target.checked) quiet() }} /> Read answers aloud{voice ? ' (a natural voice; the words of the answer are sent to ElevenLabs to make it)' : ''}</label>}
-      {how && <label className="ask-aloud" title="When my word list does not recognise your wording, a language model is asked which of my fixed questions you mean. It is sent only your question, never the data, and it writes none of the answer."><input id="ask-model" type="checkbox" checked={model} onChange={e => setModel(e.target.checked)} /> Understand any wording with {how} (it gets only your question, never the data)</label>}
-      {offerKey && !how.startsWith('your own') && (
+      <p className="ask-notes">
+        {how && <>Unusual wording is understood with {how}; it gets only your question, never the data. </>}
+        {aloud && <>Answers are read aloud{voice ? ' by ElevenLabs, which gets only the words read' : ''}. </>}
+        {voice
+          ? <button type="button" className="link" onClick={() => { setMuted(m => { if (!m) quiet(); return !m }) }}>{muted ? 'Turn the voice on' : 'Turn the voice off'}</button>
+          : canSpeak && <button type="button" className="link" onClick={() => { setPlain(v => { if (v) quiet(); return !v }) }}>{plain ? 'Stop reading answers aloud' : 'Read answers aloud'}</button>}
+      </p>
+      {offerKey && !how && (
         <details className="ask-key">
-          <summary>{how ? 'Use your own Anthropic key instead' : 'Understand any wording: use your own Anthropic key'}</summary>
+          <summary>Understand any wording: use your own Anthropic key</summary>
           <form onSubmit={useKey}>
             <input id="ask-key" type="password" value={key} onChange={e => setKey(e.target.value)} placeholder="sk-ant-..." aria-label="Your Anthropic API key" autoComplete="off" spellCheck={false} />
             <button type="submit" className="ghost" disabled={!key.trim()}>Use it</button>
