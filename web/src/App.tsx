@@ -260,11 +260,13 @@ const HEADLINE: Record<string, (reaching: number, total: number) => string> = {
 }
 
 /** The step a person takes. The tool finds and proposes; a person decides. */
-function Decision({ review, onReview, hasFix }: { review?: Review; onReview: (r: ReviewInput) => void; hasFix: boolean }) {
+function Decision({ review, onReview, hasFix, waiting = 0, onAll }: { review?: Review; onReview: (r: ReviewInput) => void; hasFix: boolean; waiting?: number; onAll?: (r: ReviewInput) => void }) {
   const [fix, setFix] = useState(review?.fix === 'approved')
   const [reviewer, setReviewer] = useState(() => review?.reviewer || remembered('readyset-reviewer'))
   const [role, setRole] = useState(() => review?.role || remembered('readyset-role'))
   const [note, setNote] = useState(review?.note ?? '')
+  // Once a person has said who they are, the page remembers it: later decisions are one click, not a form.
+  const [editing, setEditing] = useState(() => !(review?.reviewer || remembered('readyset-reviewer')).trim())
   const send = (status: ReviewInput['status']) => {
     try { localStorage.setItem('readyset-reviewer', reviewer); localStorage.setItem('readyset-role', role) } catch { /* storage may be off */ }
     onReview({ status, fix: status === 'confirmed' && fix ? 'approved' : '', reviewer: reviewer.trim(), role: role.trim(), note: note.trim() })
@@ -279,9 +281,12 @@ function Decision({ review, onReview, hasFix }: { review?: Review; onReview: (r:
               {review.status === 'confirmed' && (review.fix === 'approved' ? ' The suggested fix is approved.' : ' The suggested fix is not approved yet.')}<br />
               by {review.reviewer || 'someone who gave no name'}{review.role ? `, ${review.role}` : ''}{review.note ? `. "${review.note}"` : ''}</span></p>
         : <p className="quiet">The tool found this. It decides nothing. Check the proof, then say what it is. Your decision is written into the report.</p>}
+      {!editing && <p className="deciding-as">Deciding as <strong>{reviewer.trim()}</strong>{role.trim() ? `, ${role.trim()}` : ''}. <button type="button" className="link" onClick={() => setEditing(true)}>Change</button></p>}
       <div className="who">
-        <label>Your name<input id="review-name" value={reviewer} onChange={e => setReviewer(e.target.value)} placeholder="Name" autoComplete="name" /></label>
-        <label>Your role<input id="review-role" value={role} onChange={e => setRole(e.target.value)} placeholder="Research engineer" /></label>
+        {editing && <>
+          <label>Your name<input id="review-name" value={reviewer} onChange={e => setReviewer(e.target.value)} placeholder="Name" autoComplete="name" /></label>
+          <label>Your role<input id="review-role" value={role} onChange={e => setRole(e.target.value)} placeholder="Research engineer" /></label>
+        </>}
         <label className="wide">Note, optional<input id="review-note" value={note} onChange={e => setNote(e.target.value)} placeholder="What you checked" /></label>
       </div>
       {hasFix && <label className="also"><input id="review-fix" type="checkbox" checked={fix} onChange={e => setFix(e.target.checked)} /> Also approve the suggested fix</label>}
@@ -289,7 +294,17 @@ function Decision({ review, onReview, hasFix }: { review?: Review; onReview: (r:
         <button type="button" className="big confirm" disabled={!named} onClick={() => send('confirmed')}>This is a real problem</button>
         <button type="button" className="big dismiss" disabled={!named} onClick={() => send('dismissed')}>This is expected</button>
       </div>
-      {!named && <p className="quiet">Enter your name to record a decision.</p>}
+      {!named && <p className="quiet">Enter your name once to record a decision. The page remembers it for the rest.</p>}
+      {named && onAll && waiting > 1 && (
+        <details className="decide-all">
+          <summary>Many changes? Decide all {waiting} still waiting at once</summary>
+          <p>Use this only when you have checked them and they call for the same decision. Each one is recorded in your name, and the note says it was decided together with the others.</p>
+          <div className="decide">
+            <button type="button" className="ghost" onClick={() => onAll({ status: 'confirmed', fix: '', reviewer: reviewer.trim(), role: role.trim(), note: note.trim() })}>All {waiting} are real problems</button>
+            <button type="button" className="ghost" onClick={() => onAll({ status: 'dismissed', fix: '', reviewer: reviewer.trim(), role: role.trim(), note: note.trim() })}>All {waiting} are expected</button>
+          </div>
+        </details>
+      )}
       {review && <button type="button" className="link" onClick={() => send('cleared')}>Undo this decision</button>}
     </section>
   )
@@ -299,9 +314,10 @@ function More({ title, children, open }: { title: string; children: ReactNode; o
   return <details className="more" open={open}><summary>{title}</summary><div className="more-body">{children}</div></details>
 }
 
-function ChangePanel({ finding, doc, index, total, review, onReview, step }: {
+function ChangePanel({ finding, doc, index, total, review, onReview, step, waiting, onAll }: {
   finding: Finding; doc: Doc; index: number; total: number; review?: Review
   onReview: (finding: Finding, r: ReviewInput) => void; step: (by: number) => void
+  waiting: number; onAll: (r: ReviewInput) => void
 }) {
   const affected = (Array.isArray(finding.affects_analyses) ? finding.affects_analyses : []).filter(x => typeof x === 'string')
   const repairs = doc.repairs.filter(r => Array.isArray(r.addresses) && r.addresses.includes(finding.id))
@@ -351,7 +367,7 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step }: {
         </div>
 
         <aside className="panel-side">
-          <SectionBoundary name="decision"><Decision key={finding.id} review={review} onReview={r => onReview(finding, r)} hasFix={repairs.length > 0} /></SectionBoundary>
+          <SectionBoundary name="decision"><Decision key={finding.id} review={review} onReview={r => onReview(finding, r)} hasFix={repairs.length > 0} waiting={waiting} onAll={onAll} /></SectionBoundary>
           <section className="fix">
             <h3>Suggested fix</h3>
             {repairs.length === 0 && <p className="quiet">None proposed.</p>}
@@ -694,6 +710,15 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
     else setLocal(prev => ({ ...prev, [f.id]: r.status === 'cleared' ? null : { finding: f.id, key, status: r.status, fix: r.fix, reviewer: r.reviewer, role: r.role, note: r.note, at: new Date().toISOString() } }))
   }
   const reviewed = doc.findings.filter(f => reviewOf(f.id)).length
+  // One decision for every change still waiting, each recorded on its own in the person's name.
+  const onAll = async (r: ReviewInput) => {
+    const waiting = doc.findings.filter(f => !reviewOf(f.id))
+    const note = [r.note, `Decided together with ${waiting.length - 1} other ${waiting.length - 1 === 1 ? 'change' : 'changes'}.`].filter(Boolean).join(' ')
+    let kept = true
+    for (const f of waiting) kept = (await saveReview({ key: doc.reviewKeys[f.id] ?? f.id, ...r, note })) && kept
+    if (kept) { setLocal({}); onChanged() }
+    else setLocal(prev => ({ ...prev, ...Object.fromEntries(waiting.map(f => [f.id, { finding: f.id, key: doc.reviewKeys[f.id] ?? f.id, status: r.status, fix: r.fix, reviewer: r.reviewer, role: r.role, note, at: new Date().toISOString() } as Review])) }))
+  }
   const toggle = (id: string) => {
     const next = doc.asked.includes(id) ? doc.asked.filter(a => a !== id) : doc.available.map(a => a.id).filter(a => a === id || doc.asked.includes(a))
     if (next.length) onQuestion(next)
@@ -790,7 +815,7 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
               )
             })}
           </ol>
-          {finding && <ChangePanel finding={finding} doc={doc} index={ids.indexOf(finding.id)} total={ids.length} review={reviewOf(finding.id)} onReview={onReview} step={step} />}
+          {finding && <ChangePanel finding={finding} doc={doc} index={ids.indexOf(finding.id)} total={ids.length} review={reviewOf(finding.id)} onReview={onReview} step={step} waiting={doc.findings.length - reviewed} onAll={onAll} />}
         </>}
       </section>
 

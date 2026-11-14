@@ -257,3 +257,6 @@ article.panel.pointed { outline: 3px solid var(--point); outline-offset: 6px; bo
 .history-row { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline } .history-when { color: var(--muted); font-variant-numeric: tabular-nums }
 .history-verdict { font-weight: 700 } .history-verdict.ready { color: var(--ready) } .history-verdict.conditional { color: var(--conditional) } .history-verdict.blocked { color: var(--blocked) } .history-verdict.insufficient { color: var(--insufficient) }
 .history ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); display: flex; flex-direction: column; gap: 3px }
+
+.deciding-as { font-size: 14.5px } .deciding-as .link { margin-left: 6px }
+.decide-all { font-size: 13.5px; color: var(--muted) } .decide-all summary { cursor: pointer; color: var(--brand); font-weight: 600 } .decide-all p { margin: 8px 0 }
