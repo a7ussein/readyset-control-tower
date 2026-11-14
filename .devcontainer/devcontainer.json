@@ -10,5 +10,6 @@
       "onAutoForward": "openPreview"
     }
   },
-  "postStartCommand": "nohup python3 -m control_tower serve --no-open > /tmp/control-tower.log 2>&1 &"
+  "postStartCommand": "(setsid python3 -m control_tower serve --no-open > /tmp/control-tower.log 2>&1 < /dev/null &) ; sleep 2",
+  "postAttachCommand": "curl -s -o /dev/null localhost:8010/api/health || python3 -m control_tower serve --no-open"
 }
