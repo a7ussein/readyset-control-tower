@@ -31,6 +31,20 @@ The only thing it needs is Python 3.9 or newer ([download Python](https://www.py
 between them (swapped, copied, missing or relabelled samples), reruns only the analyses those changes touch, and
 writes `findings.json` in the organisers' shared format.
 
+## Where each judging criterion is met
+
+The Cohort Firewall track is scored on seven criteria. This is where to look for each, on the page and in the code.
+
+| Criterion | On the page | In the repository |
+|---|---|---|
+| **Finding data problems**, without reporting problems the data does not support | The list of changes. On the organisers' practice release it reports exactly what was planted and nothing else. | `control_tower/detect.py`, `control_tower/compare.py`; `tests/test_detectors.py` states what must and must not be reported for each kind of change. |
+| **Reasoning for the research question**: the result changes when the question changes | Switch an analysis off under "What I need it for": the verdict and each change's rating follow the question. | `control_tower/analyses.py` (what each analysis reads), `_severity` in `control_tower/compare.py`. |
+| **Evidence and sources**: checks, data fields, decision rules, limitations | On each change: "The proof", "See the data in both files", "How the tool decided this", "What this cannot tell you". "How it works and how it was tested" under the verdict. | `control_tower/cells.py`, `x_readyset.rules` and `x_readyset.witness` in `findings.json`, `docs/ENGINE-PLAN.md`. |
+| **Safety and uncertainty**: no clinical claims, uncertainty visible, human review required | Every change shows its confidence and its limit, and waits for a named person. Ask refuses clinical questions and says "I cannot answer that" when the findings do not hold the answer. | `needs_human_review` and `confidence` on every finding; the `clinical` and `limits` answers in `control_tower/ask.py`; `tests/test_ask.py`. |
+| **Working tool and clear setup** | Press "Try it now" above, or unzip and double-click. | `run.sh`, `run.bat`, `run.command`; the tool needs only Python. `python3 -m unittest discover -s tests -t .` runs the tests. |
+| **Useful next steps**: fixes that match the size of the problem | "So what?" and "Suggested fix" on each change, marked "before use" or "small effect". | `repairs` and `x_readyset.repair_priority` in `findings.json`. |
+| **Communication**: understandable without specialist knowledge | The verdict in one sentence, the audit report in plain English, the change log as a spreadsheet. | `control_tower/report.py`, `control_tower/changelog.py`. |
+
 ## Status
 
 The comparison engine and the page both work. The engine is tested, and the two together have been run on the organisers' practice release.

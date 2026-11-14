@@ -331,7 +331,7 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step, waiti
   return (
     <article className="panel" key={finding.id} aria-label={`Change ${index + 1} of ${total}`}>
       <header className="panel-head">
-        <p className="eyebrow">Change {index + 1} of {total} <span className="ref">{finding.id}</span>{' '}<span className="sev">{KIND[finding.kind] ?? words(finding.kind)}</span>{' '}<span className={`sev sev-${text(finding.severity)}`}>{text(finding.severity, 'unrated')} severity</span></p>
+        <p className="eyebrow">Change {index + 1} of {total} <span className="ref">{finding.id}</span>{' '}<span className="sev">{KIND[finding.kind] ?? words(finding.kind)}</span>{' '}<span className={`sev sev-${text(finding.severity)}`}>{text(finding.severity, 'unrated')} severity</span>{' '}<span className="sev" title="How sure the tool is that this is what happened. The reasons and the limits are below.">{text(finding.confidence, 'unstated')} confidence</span></p>
         <h2>{titleOf(finding)}</h2>
         <p className="lede">{text(finding.summary)}</p>
         {(() => {
