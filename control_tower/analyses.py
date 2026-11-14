@@ -117,7 +117,7 @@ class MeanByGroup:
         path = release.path_of(folder, self.file)
         try:
             return set(release.header_of(path)[1:]) if path else set()
-        except (OSError, EOFError, UnicodeDecodeError, StopIteration):
+        except (release.Unreadable, OSError, EOFError, UnicodeDecodeError, StopIteration):
             return set()
 
     def run(self, folder):

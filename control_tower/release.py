@@ -69,12 +69,13 @@ def is_primary(sample_id):
 
 
 def layout(path):
-    """'row' when each line is a sample, 'column' when each column is one. Decided by where the sample ids are."""
+    """'row' when each line is a sample, 'column' when each column is one. Decided by where the sample ids are.
+    None for a file that holds a header and nothing else, which could be either."""
     try:
         with _open_text(path) as fh:
             reader = csv.reader(fh, delimiter="\t")
             header = next(reader, None)
-            first = next(reader, None)
+            first = next((line for line in reader if line), None)        # the first line that is not blank
     except (OSError, EOFError, UnicodeDecodeError, csv.Error) as e:
         raise Unreadable(f"{os.path.basename(path)} could not be read: {e}")
     if not header:
@@ -84,7 +85,7 @@ def layout(path):
     if first and is_sample_id(first[0]):
         return "row"
     if first is None:
-        return "column" if len(header) > 1 else "row"
+        return None                 # a header and no data lines: the header alone does not say which way round it is
     raise Unreadable(f"{os.path.basename(path)}: no TCGA sample ids in the header or the first column")
 
 
@@ -122,8 +123,20 @@ def row_fingerprints(table, columns):
 
 # --------------------------------------------------------------- files with one sample per column --
 def header_of(path):
-    with _open_text(path) as fh:
-        return next(csv.reader(fh, delimiter="\t"))
+    """The header line's cells. A file with no header line (zero bytes, or only blank lines) is not a table."""
+    try:
+        with _open_text(path) as fh:
+            header = next(csv.reader(fh, delimiter="\t"), None)
+    except (OSError, EOFError, UnicodeDecodeError, csv.Error) as e:
+        raise Unreadable(f"{os.path.basename(path)} could not be read: {e}")
+    if not header:
+        raise Unreadable(f"{os.path.basename(path)} is empty")
+    return header
+
+
+def _row_name(line):
+    """The first cell of a line. A row that is only its name has no tab, so the line ending must not stick to it."""
+    return line.split("\t", 1)[0].rstrip("\r\n")
 
 
 def row_names(path):
@@ -134,7 +147,7 @@ def row_names(path):
             next(fh)
             for line in fh:
                 if line.strip():
-                    names.append(line.split("\t", 1)[0])
+                    names.append(_row_name(line))
     except (OSError, EOFError, UnicodeDecodeError, StopIteration) as e:
         raise Unreadable(f"{os.path.basename(path)} could not be read: {e}")
     return names
@@ -145,14 +158,14 @@ def _lines(path, keep, in_order):
     otherwise held and sorted (the fallback for a release that shuffled its rows)."""
     if in_order:
         with _open_text(path) as fh:
-            next(fh)
+            next(fh, None)
             for line in fh:
-                if line.split("\t", 1)[0] in keep:
+                if _row_name(line) in keep:
                     yield line.rstrip("\r\n").split("\t")
     else:
         with _open_text(path) as fh:
-            next(fh)
-            held = [line.rstrip("\r\n").split("\t") for line in fh if line.split("\t", 1)[0] in keep]
+            next(fh, None)
+            held = [line.rstrip("\r\n").split("\t") for line in fh if _row_name(line) in keep]
         held.sort(key=lambda cells: cells[0])
         yield from held
 
@@ -183,9 +196,9 @@ def column_cells(path, wanted, keep):
     index = {s: i + 1 for i, s in enumerate(header[1:]) if s in wanted}
     out = {s: {} for s in index}
     with _open_text(path) as fh:
-        next(fh)
+        next(fh, None)
         for line in fh:
-            name = line.split("\t", 1)[0]
+            name = _row_name(line)
             if name not in keep:
                 continue
             cells = line.rstrip("\r\n").split("\t")
@@ -218,9 +231,9 @@ def one_row(path, name):
     header = header_of(path)
     samples = header[1:]
     with _open_text(path) as fh:
-        next(fh)
+        next(fh, None)
         for line in fh:
-            if line.split("\t", 1)[0] == name:
+            if _row_name(line) == name:
                 cells = line.rstrip("\r\n").split("\t")
                 return samples, {s: (cells[i + 1] if i + 1 < len(cells) else "") for i, s in enumerate(samples)}
     return samples, None

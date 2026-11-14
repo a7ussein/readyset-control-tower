@@ -131,6 +131,8 @@ def compare_file(file, path_a, path_b, rel_a, rel_b, describe=None):
     `describe(samples)` may return {label: [value per sample]} from the clinical record, used to say which
     subgroups lost coverage."""
     kind_a, kind_b = release.layout(path_a), release.layout(path_b)
+    # A file with a header and no data lines takes the other release's layout: every sample in it is then reported gone.
+    kind_a, kind_b = kind_a or kind_b or "column", kind_b or kind_a or "column"
     if kind_a != kind_b:
         raise release.Unreadable(f"{file} is laid out differently in the two releases")
     findings = []
