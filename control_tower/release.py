@@ -33,8 +33,10 @@ class Unreadable(Exception):
 def path_of(folder, name):
     """Where a release's file is in a folder. A packed file may have been unpacked by whoever edited it, so
     `x.tsv` stands in for `x.tsv.gz`; when both are there, the one changed most recently is the one meant."""
-    found = [p for p in ([os.path.join(folder, name)] + ([os.path.join(folder, name[:-3])] if name.endswith(".gz") else []))
-             if os.path.isfile(p)]
+    stem = name[:-3] if name.endswith(".gz") else name
+    stem = stem[:-4] if stem.endswith(".tsv") else stem
+    names = [name, stem + ".tsv"] + [stem + ext for ext in (".csv", ".xlsx", ".txt")]
+    found = [p for p in dict.fromkeys(os.path.join(folder, n) for n in names) if os.path.isfile(p)]
     return max(found, key=os.path.getmtime) if found else None
 
 
@@ -70,8 +72,7 @@ def _encoding(path):
     except (OSError, EOFError) as e:
         raise Unreadable(f"{name} could not be read: {e}")
     if head[:4] == b"PK\x03\x04":
-        raise Unreadable(f"{name} is not a text table: it is an Excel workbook or a zip saved under this name. "
-                         f"Save it from the spreadsheet as tab-separated text and give that file")
+        raise Unreadable(f"{name} is a zip, not a table. Unpack it and give the table inside")
     if head[:2] in (b"\xff\xfe", b"\xfe\xff"):
         found = "utf-16"
     elif head[:3] == b"\xef\xbb\xbf":
@@ -89,7 +90,117 @@ def _encoding(path):
     return found
 
 
+_tables = {}
+
+
+def _as_table(path):
+    """The path of a tab-separated text file holding this table. Usually the file itself. A spreadsheet workbook
+    (.xlsx) or a comma-separated file, which is what a spreadsheet program makes of a table when a person edits it,
+    is written out once as tab-separated text in a scratch folder and read from there. A Numbers document cannot be
+    read without Numbers, so it is refused with the two clicks that fix it."""
+    try:
+        key = (path, os.path.getmtime(path), os.path.getsize(path))
+    except OSError:
+        return path
+    if key in _tables:
+        return _tables[key]
+    name = os.path.basename(path)
+    out = path
+    try:
+        with open(path, "rb") as fh:
+            magic = fh.read(4)
+        if magic == b"PK\x03\x04":
+            import zipfile
+            try:
+                with zipfile.ZipFile(path) as z:
+                    inside = z.namelist()
+                    if any(n.startswith("xl/worksheets/") for n in inside):
+                        out = _scratch(name, _workbook_rows(z))
+                    elif any(n.endswith(".iwa") or n.startswith("Index") for n in inside):
+                        raise Unreadable(f"{name} is a Numbers document, not a text table. In Numbers choose File, Export To, "
+                                         f"TSV (or CSV), and give the exported file")
+            except zipfile.BadZipFile:
+                pass
+        elif magic[:2] != b"\x1f\x8b" and key[2] < (64 << 20):
+            with open(path, "r", newline="", encoding=_encoding(path), errors="replace") as fh:
+                first = fh.readline()
+                if "\t" not in first and ("," in first or ";" in first):
+                    fh.seek(0)
+                    out = _scratch(name, csv.reader(fh, delimiter="," if first.count(",") >= first.count(";") else ";"))
+    except OSError as e:
+        raise Unreadable(f"{name} could not be read: {e}")
+    _tables[key] = out
+    return out
+
+
+def _scratch(name, rows):
+    """Write rows as tab-separated UTF-8 text in a scratch folder and say where."""
+    import tempfile
+    folder = tempfile.mkdtemp(prefix="readyset-table-")
+    target = os.path.join(folder, name + ".as-text.tsv")
+    with open(target, "w", newline="", encoding="utf-8") as fh:
+        writer = csv.writer(fh, delimiter="\t", lineterminator="\n", quoting=csv.QUOTE_NONE, escapechar=None, quotechar=None)
+        for row in rows:
+            writer.writerow([str(c).replace("\t", " ").replace("\n", " ").replace("\r", " ") for c in row])
+    return target
+
+
+def _workbook_rows(z):
+    """The rows of the first sheet of an Excel workbook, as text. Numbers are written the shortest way that gives
+    the same number back, so 3.4326616979572599 in the workbook reads 3.43266169795726, as it did in the text file."""
+    import xml.etree.ElementTree as ET
+    ns = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+    shared = []
+    if "xl/sharedStrings.xml" in z.namelist():
+        with z.open("xl/sharedStrings.xml") as fh:
+            for _, el in ET.iterparse(fh):
+                if el.tag == ns + "si":
+                    shared.append("".join(t.text or "" for t in el.iter(ns + "t")))
+                    el.clear()
+    sheets = sorted((n for n in z.namelist() if n.startswith("xl/worksheets/") and n.endswith(".xml")),
+                    key=lambda n: (len(n), n))
+    if not sheets:
+        raise Unreadable("the workbook holds no sheet")
+
+    def column(ref):
+        n = 0
+        for ch in ref:
+            if ch.isalpha():
+                n = n * 26 + (ord(ch.upper()) - 64)
+        return n - 1
+
+    def text_of(c):
+        kind, v = c.get("t"), c.find(ns + "v")
+        if kind == "inlineStr":
+            return "".join(t.text or "" for t in c.iter(ns + "t"))
+        if v is None or v.text is None:
+            return ""
+        if kind == "s":
+            return shared[int(v.text)] if v.text.isdigit() and int(v.text) < len(shared) else ""
+        if kind == "b":
+            return "TRUE" if v.text == "1" else "FALSE"
+        if kind in (None, "n"):
+            raw = v.text.strip()
+            if raw.lstrip("-").isdigit():
+                return raw
+            try:
+                number = float(raw)
+                return str(int(number)) if number.is_integer() and abs(number) < 1e15 and "." not in raw and "e" not in raw.lower() else repr(number)
+            except ValueError:
+                return raw
+        return v.text
+    with z.open(sheets[0]) as fh:
+        for _, el in ET.iterparse(fh):
+            if el.tag == ns + "row":
+                cells = {}
+                for i, c in enumerate(el.findall(ns + "c")):
+                    cells[column(c.get("r")) if c.get("r") else i] = text_of(c)
+                yield [cells.get(i, "") for i in range(max(cells) + 1)] if cells else []
+                el.clear()
+
+
 def _open_text(path):
+    path = _as_table(path)
     encoding = _encoding(path)
     errors = "strict" if encoding.startswith("utf-8") else "replace"
     if _is_gzip(path):

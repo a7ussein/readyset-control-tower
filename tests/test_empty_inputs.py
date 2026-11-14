@@ -103,17 +103,79 @@ class EmptyInputs(unittest.TestCase):
             doc = compare(folder_a, folder_b)
             self.assertEqual((doc["verdict"], doc["findings"]), ("Ready", []), name)
 
-    def test_a_file_that_is_not_text_is_refused_in_plain_words(self):
-        import zipfile
+    def workbook(self, tsv_path, out):
+        """A minimal Excel workbook holding the same table, written the way a spreadsheet program stores it."""
+        import csv, zipfile
+        with open(tsv_path, encoding="utf-8") as fh:
+            rows = list(csv.reader(fh, delimiter="\t"))
+        shared, index = [], {}
+        def ref(r, c):
+            col, n = "", c + 1
+            while n:
+                n, rem = divmod(n - 1, 26)
+                col = chr(65 + rem) + col
+            return f"{col}{r + 1}"
+        def cell(r, c, v):
+            if v == "":
+                return ""                                             # a workbook simply leaves an empty cell out
+            index.setdefault(v, len(shared)) == len(shared) and shared.append(v)
+            return f'<c r="{ref(r, c)}" t="s"><v>{index[v]}</v></c>'
+        main = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
+        sheet = f"<worksheet {main}><sheetData>" + "".join(
+            f'<row r="{r + 1}">' + "".join(cell(r, c, v) for c, v in enumerate(row)) + "</row>" for r, row in enumerate(rows)) + "</sheetData></worksheet>"
+        strings = f"<sst {main}>" + "".join(f"<si><t>{v.replace('&', '&amp;').replace('<', '&lt;')}</t></si>" for v in shared) + "</sst>"
+        with zipfile.ZipFile(out, "w") as z:
+            z.writestr("xl/workbook.xml", "<workbook/>")
+            z.writestr("xl/worksheets/sheet1.xml", sheet)
+            z.writestr("xl/sharedStrings.xml", strings)
+
+    def test_a_table_saved_as_a_workbook_or_as_comma_separated_text_is_still_read(self):
+        # Opening a .tsv on a Mac or in Excel and saving it gives a workbook or a .csv. It is still the same table.
+        import csv
+        def as_workbook(folder, keep_name):
+            path = os.path.join(folder, CLINICAL)
+            self.workbook(path, path + ".x")
+            os.remove(path)
+            os.replace(path + ".x", path if keep_name else os.path.join(folder, "clinical.xlsx"))
+        def as_commas(folder, keep_name):
+            path = os.path.join(folder, CLINICAL)
+            with open(path, encoding="utf-8") as fh:
+                rows = list(csv.reader(fh, delimiter="\t"))
+            os.remove(path)
+            with open(path if keep_name else os.path.join(folder, "clinical.csv"), "w", newline="", encoding="utf-8") as fh:
+                csv.writer(fh).writerows(rows)
+        for save in (as_workbook, as_commas):
+            for keep_name in (True, False):
+                d = tempfile.mkdtemp()
+                a = TinyRelease()
+                folder_a, folder_b = a.write(os.path.join(d, "A")), a.copy().write(os.path.join(d, "B"))
+                save(folder_b, keep_name)
+                doc = compare(folder_a, folder_b)
+                self.assertEqual((doc["verdict"], doc["findings"]), ("Ready", []), (save.__name__, keep_name))
+        # and a change made in the spreadsheet is found like any other
         d = tempfile.mkdtemp()
         a = TinyRelease()
-        folder_a, folder_b = a.write(os.path.join(d, "A")), a.copy().write(os.path.join(d, "B"))
-        with zipfile.ZipFile(os.path.join(folder_b, CLINICAL), "w") as z:      # a workbook saved under the table's name
-            z.writestr("xl/workbook.xml", "<workbook/>")
-        doc = compare(folder_a, folder_b)
-        self.assertEqual(doc["verdict"], "Insufficient Evidence")
-        self.assertIn("Excel workbook or a zip", doc["findings"][0]["summary"])
-        self.assertNotIn("codec", json.dumps(doc))                              # no programmer's error text reaches the page
+        folder_a, folder_b = a.write(os.path.join(d, "A")), a.copy().relabel("PAM50Call_RNAseq", "TCGA-T1-0001-01", "Basal").write(os.path.join(d, "B"))
+        as_workbook(folder_b, True)
+        self.assertEqual([f["kind"] for f in compare(folder_a, folder_b)["findings"]], ["label_conflict"])
+
+    def test_a_file_that_cannot_be_read_as_a_table_is_refused_in_plain_words(self):
+        import zipfile
+        def numbers(path):
+            with zipfile.ZipFile(path, "w") as z:
+                z.writestr("Index/Document.iwa", "x")
+        def other_zip(path):
+            with zipfile.ZipFile(path, "w") as z:
+                z.writestr("notes.txt", "x")
+        for make, words in ((numbers, "In Numbers choose File, Export To"), (other_zip, "is a zip, not a table")):
+            d = tempfile.mkdtemp()
+            a = TinyRelease()
+            folder_a, folder_b = a.write(os.path.join(d, "A")), a.copy().write(os.path.join(d, "B"))
+            make(os.path.join(folder_b, CLINICAL))
+            doc = compare(folder_a, folder_b)
+            self.assertEqual(doc["verdict"], "Insufficient Evidence")
+            self.assertIn(words, doc["findings"][0]["summary"])
+            self.assertNotIn("codec", json.dumps(doc))                          # no programmer's error text reaches the page
 
 
 if __name__ == "__main__":

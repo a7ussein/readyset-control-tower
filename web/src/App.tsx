@@ -687,7 +687,8 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
   const adder = (set: (change: (old: Staged) => Staged) => void) => (files: File[], name: string) => {
     const isZip = (f: File) => f.name.toLowerCase().endsWith('.zip')
     // A packed file that someone unpacked to edit keeps its place: x.tsv stands in for x.tsv.gz.
-    const proper = (n: string) => (state.files.includes(n) ? n : state.files.includes(`${n}.gz`) ? `${n}.gz` : '')
+    const stem = (n: string) => n.replace(/\.gz$/i, '').replace(/\.(tsv|csv|xlsx|txt|numbers)$/i, '').toLowerCase()
+    const proper = (n: string) => state.files.find(f => f === n) ?? state.files.find(f => stem(f) === stem(n)) ?? ''
     const byName = new Map<string, File>()
     const both: string[] = []
     for (const f of files) {
@@ -701,7 +702,7 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
     const wanted = [...byName.values()]
     const left = files.filter(f => !isZip(f) && !proper(f.name)).map(f => f.name).filter(n => !n.startsWith('.'))
     setProblem(left.length && wanted.length === 0
-      ? `None of those is one of a release's files. A release's files are named ${state.files.join(', ')}, or give a zip of them.`
+      ? `None of those is one of a release's files. A release's files are named ${state.files.map(f => f.replace(/\.tsv(\.gz)?$/, '')).join(', ')} (as .tsv, .csv or .xlsx), or give a zip of them.`
       : [left.length ? `Left out, because ${left.length === 1 ? 'it is not one' : 'they are not'} of a release's files: ${left.slice(0, 6).join(', ')}.` : '',
          both.length ? `Both a packed and an unpacked copy of ${both.join(', ')} were there. The one changed most recently was used.` : ''].filter(Boolean).join(' '))
     if (wanted.length === 0) return
