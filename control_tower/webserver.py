@@ -140,6 +140,18 @@ class Handler(BaseHTTPRequestHandler):
                 pass
         self._json(200, reply)
 
+    def _cells(self, finding):
+        """The cells behind one finding, read from the two release files: see cells.py."""
+        from .cells import cells
+        srv = self.server
+        if not (srv.releases and all(srv.releases)):
+            return self._json(400, {"detail": "there are no release files to open: the page is showing a findings file"})
+        status, doc = self._document("")
+        if status != 200:
+            return self._json(status, doc)
+        view = cells(srv.releases[0], srv.releases[1], doc, finding)
+        self._json(400 if "detail" in view else 200, view)
+
     def _history_path(self):
         srv = self.server
         if not srv.reviews_path or not (srv.releases and all(srv.releases)):
@@ -519,6 +531,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._findings(parse_qs(urlsplit(self.path).query).get("for", [""])[0], as_changelog=True)
             if path == "/api/history":
                 return self._history()
+            if path == "/api/cells":
+                return self._cells(parse_qs(urlsplit(self.path).query).get("finding", [""])[0])
             if path.startswith("/api/"):
                 return self._json(404, {"detail": f"no such endpoint: GET {path}"})
             self._static(path)

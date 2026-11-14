@@ -126,3 +126,12 @@ export async function spokenAudio(text: string): Promise<string | null> {
     return response.ok ? URL.createObjectURL(await response.blob()) : null
   } catch { return null }
 }
+
+export interface DataView {
+  finding: string; file: string; releases: string[]; what_a_row_is: string; note?: string
+  samples: { id: string; in_trusted: boolean; in_new: boolean }[]; more_samples: number
+  rows: { name: string; changed: boolean; cells: { before: string | null; after: string | null; changed: boolean }[] }[]
+  rows_in_file: number | null; rows_that_differ: number; rows_left_out: number
+}
+/** The cells behind one change, read from the two release files themselves. */
+export const dataBehind = async (finding: string) => json<DataView>(await fetch(`${base}/api/cells?finding=${encodeURIComponent(finding)}`))

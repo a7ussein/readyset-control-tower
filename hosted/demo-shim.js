@@ -113,6 +113,26 @@
       return json(200, { ...got.body, ...(await flags()) })
     }
     if (path === '/api/envelope') return json(400, { detail: NO_ENVELOPE })
+    if (path === '/api/cells') {
+      const fid = url.searchParams.get('finding') || ''
+      if (live && python_ready && JSON.parse(python_ready.runPython('readyset_browser.current()')).new) {
+        await pause()
+        python_ready.globals.set('finding_text', fid)
+        const got = JSON.parse(python_ready.runPython('readyset_browser.cells_of(finding_text)'))
+        return json(got.status, got.body)
+      }
+      // The practice release's files are not kept on this page. Show the row that was recorded with its result.
+      const doc = JSON.parse(await load('data/findings-all.json'))
+      const w = ((doc.x_readyset || {}).witness || {})[fid]
+      const f = (doc.findings || []).find(x => x.id === fid)
+      if (!w || !f || !(w.values || []).length) return json(400, { detail: 'The practice release\'s files are not kept on this page, so there is nothing more to open for this change. Choose your own before and after releases and every cell can be opened.' })
+      const samples = w.values.slice(0, 8)
+      return json(200, { finding: fid, file: w.file, releases: w.releases, what_a_row_is: 'a row of the file (one measurement)',
+        samples: samples.map(v => ({ id: v.sample, in_trusted: v.before !== null, in_new: v.after !== null })), more_samples: Math.max(0, w.values.length - 8),
+        rows: [{ name: w.row, changed: true, cells: samples.map(v => ({ before: v.before, after: v.after, changed: v.before !== v.after })) }],
+        rows_in_file: null, rows_that_differ: 1, rows_left_out: 0,
+        note: 'The practice release\'s files are not kept on this page, so only the one row recorded with its result is shown. Choose your own before and after releases and every row of the file opens here.' })
+    }
     if (path === '/api/speak' && method === 'POST') return realFetch(new URL('api/speak', here), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: init.body })
     if (path === '/api/history') return json(200, { comparisons: [] })
     if (path === '/api/findings') {

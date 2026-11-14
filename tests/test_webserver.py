@@ -376,6 +376,18 @@ class Server(unittest.TestCase):
         self.assertEqual([f["kind"] for f in doc["findings"]], ["sample_swap"])
         self.assertFalse(os.path.exists(os.path.join(d, "settings.json")) and "before" in open(os.path.join(d, "settings.json")).read())
 
+    def test_the_cells_behind_a_change_can_be_opened_from_both_files(self):
+        from tests.tiny_release import N1, P1, PROTEIN
+        base, _ = self.live()
+        view = json.loads(self.get(base + "/api/cells?finding=F1")[1])
+        self.assertEqual((view["file"], view["releases"], [s["id"] for s in view["samples"]]), (PROTEIN, ["A", "B"], sorted([P1, N1])))
+        self.assertEqual((view["rows_in_file"], view["rows_that_differ"]), (3, 3))        # the whole profile was exchanged
+        era = next(r for r in view["rows"] if r["name"] == "ERALPHA")
+        first, second = era["cells"]
+        self.assertEqual((first["before"], first["after"]), (second["after"], second["before"]))   # each holds the other's text
+        self.assertTrue(first["changed"] and second["changed"])
+        self.assertEqual(self.get(base + "/api/cells?finding=F9")[0], 400)
+
     def test_the_audit_report_says_the_same_things_in_plain_english(self):
         base, _ = self.live()
         doc = json.loads(self.get(base + "/api/findings")[1])

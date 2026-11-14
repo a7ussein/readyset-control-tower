@@ -7,6 +7,7 @@ import type { Analysis, FileInfo, Finding, Findings, Pointer, Repair, Review, Wi
 import { useTheme } from './theme'
 import { SectionBoundary } from './SectionBoundary'
 import { Ask } from './Ask'
+import { DataView, showData } from './DataView'
 
 // ---- reading a file that may be malformed --------------------------------------------------------------------------
 const list = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v.filter(x => x && typeof x === 'object' && !Array.isArray(x)) as T[]) : [])
@@ -338,6 +339,7 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step, waiti
         <div className="panel-main">
           <h3>The proof</h3>
           <SectionBoundary name="proof"><Proof finding={finding} witness={doc.witness[finding.id]} /></SectionBoundary>
+          {!usingExample && <p className="see-data"><button type="button" className="ghost" onClick={() => showData(finding.id)}>See the data in both files, side by side</button></p>}
           <h3>What it does to your analyses</h3>
           {affected.length === 0 && <p className="plain">Nothing. None of the analyses you chose reads what changed here.</p>}
           {affected.map(id => {
@@ -589,61 +591,94 @@ function History({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Relea
   )
 }
 
+type Staged = { files: File[]; name: string }
+
+/** One side of a comparison: files are collected here, and nothing runs until Compare is pressed. */
+function SideBox({ id, title, hint, staged, using, busy, onAdd, onRemove, onClear }: {
+  id: string; title: string; hint: string; staged: Staged; using?: string | null; busy: boolean
+  onAdd: (files: File[], name: string) => void; onRemove: (name: string) => void; onClear: () => void
+}) {
+  const [over, setOver] = useState(false)
+  const folder = useRef<HTMLInputElement>(null)
+  const files = useRef<HTMLInputElement>(null)
+  const zip = useRef<HTMLInputElement>(null)
+  const drop = async (e: DragEvent) => {
+    e.preventDefault(); e.stopPropagation(); setOver(false)
+    try { const got = await droppedFiles(e.dataTransfer); onAdd(got.files, got.name) } catch { /* the parent says what to do instead */ }
+  }
+  const size = (n: number) => (n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} kB`)
+  return (
+    <div className={`side${over ? ' over' : ''}`} data-side={id} onDragOver={e => { e.preventDefault(); e.stopPropagation(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={drop}>
+      <h3>{title}</h3>
+      <p className="quiet">{hint}</p>
+      {staged.files.length === 0 && using && <p className="side-using">Using <code>{using}</code>. Add files here to use a different one.</p>}
+      {staged.files.length > 0 && (
+        <ul className="staged">
+          {staged.files.map(f => <li key={f.name}><code>{f.name}</code><span>{size(f.size)}</span><button type="button" className="link" disabled={busy} onClick={() => onRemove(f.name)} aria-label={`Remove ${f.name}`}>Remove</button></li>)}
+        </ul>
+      )}
+      <p className="drop-buttons">
+        <button type="button" className="ghost" disabled={busy} onClick={() => files.current?.click()}>{staged.files.length ? 'Add more files' : 'Choose files'}</button>
+        <button type="button" className="ghost" disabled={busy} onClick={() => folder.current?.click()}>Choose a folder</button>
+        <button type="button" className="ghost" disabled={busy} onClick={() => zip.current?.click()}>Choose a zip</button>
+        {staged.files.length > 0 && <button type="button" className="link" disabled={busy} onClick={onClear}>Clear</button>}
+      </p>
+      <input ref={files} id={`${id}-files`} type="file" hidden multiple onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) onAdd(f, ''); e.target.value = '' }} />
+      <input ref={folder} id={`${id}-folder`} type="file" hidden multiple {...{ webkitdirectory: '' }} onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) onAdd(f, (f[0].webkitRelativePath || '').split('/')[0] || ''); e.target.value = '' }} />
+      <input ref={zip} id={`${id}-zip`} type="file" hidden accept=".zip" onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) onAdd(f, f[0].name); e.target.value = '' }} />
+    </div>
+  )
+}
+
 function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: ReleaseState) => void }) {
   const [open, setOpen] = useState(!state.new)
-  const [over, setOver] = useState(false)
   const [busy, setBusy] = useState('')
   const [problem, setProblem] = useState('')
   const [path, setPath] = useState('')
   const [trusted, setTrusted] = useState('')
   const [envelope, setEnvelope] = useState('')
   const [code, setCode] = useState('')
-  const folderInput = useRef<HTMLInputElement>(null)
-  const zipInput = useRef<HTMLInputElement>(null)
-  const filesInput = useRef<HTMLInputElement>(null)
-  const trustedFiles = useRef<HTMLInputElement>(null)
+  const [before, setBefore] = useState<Staged>({ files: [], name: '' })
+  const [after, setAfter] = useState<Staged>({ files: [], name: '' })
   const run = async (work: () => Promise<ReleaseState>) => {
     setProblem('')
-    try { const next = await work(); setBusy(''); setOpen(!next.new); setPath(''); onLoaded(next) }
+    try { const next = await work(); setBusy(''); setOpen(!next.new); setPath(''); setBefore({ files: [], name: '' }); setAfter({ files: [], name: '' }); onLoaded(next) }
     catch (e) { setBusy(''); setProblem(e instanceof Error ? e.message : String(e)) }
   }
-  const send = (files: File[], name: string) => { setBusy('Reading'); run(() => uploadRelease(files, name, state.files, setBusy)) }
-  // The "before": the trusted release can be chosen from this computer too, not only pasted as a path.
-  const [pickTrusted, setPickTrusted] = useState(false)
-  const trustedFolder = useRef<HTMLInputElement>(null)
-  const trustedZip = useRef<HTMLInputElement>(null)
-  const sendTrusted = (files: File[], name: string) => {
-    setBusy('Reading the trusted release'); setProblem('')
-    uploadRelease(files, name, state.files, setBusy, 'trusted')
-      .then(next => { setBusy(''); setPickTrusted(false); setOpen(true); onLoaded(next) })
-      .catch(e => { setBusy(''); setProblem(e instanceof Error ? e.message : String(e)) })
+  // Files are collected, not sent: a release is usually several files, and the two sides may hold files of the same name.
+  const adder = (set: (change: (old: Staged) => Staged) => void) => (files: File[], name: string) => {
+    const isZip = (f: File) => f.name.toLowerCase().endsWith('.zip')
+    const wanted = files.filter(f => state.files.includes(f.name) || isZip(f))
+    const left = files.filter(f => !wanted.includes(f)).map(f => f.name)
+    setProblem(left.length && wanted.length === 0
+      ? `None of those is one of a release's files. A release's files are named ${state.files.join(', ')}, or give a zip of them.`
+      : left.length ? `Left out, because ${left.length === 1 ? 'it is not one' : 'they are not'} of a release's files: ${left.slice(0, 6).join(', ')}.` : '')
+    if (wanted.length === 0) return
+    set(old => {
+      const zipped = wanted.find(isZip)
+      if (zipped) return { files: [zipped], name: name || zipped.name }                         // a zip is the whole release
+      const kept = old.files.filter(f => !isZip(f) && !wanted.some(w => w.name === f.name))     // a file chosen again replaces the earlier one
+      return { files: [...kept, ...wanted], name: name || old.name }
+    })
   }
-  const trustedChooser = (
-    <div className="trusted-choose">
-      <p><strong>The trusted release (the "before").</strong> Choose its folder or a zip of it.</p>
-      <p className="drop-buttons">
-        <button type="button" className="ghost" disabled={!!busy} onClick={() => trustedFolder.current?.click()}>Choose the trusted folder</button>
-        <button type="button" className="ghost" disabled={!!busy} onClick={() => trustedFiles.current?.click()}>Choose its files</button>
-        <button type="button" className="ghost" disabled={!!busy} onClick={() => trustedZip.current?.click()}>Choose a zip</button>
-      </p>
-      <input ref={trustedFiles} type="file" hidden multiple onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) sendTrusted(f, 'trusted'); e.target.value = '' }} />
-      <input ref={trustedFolder} type="file" hidden multiple {...{ webkitdirectory: '' }} onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) sendTrusted(f, (f[0].webkitRelativePath || '').split('/')[0] || 'trusted'); e.target.value = '' }} />
-      <input ref={trustedZip} type="file" hidden accept=".zip" onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) sendTrusted(f, f[0].name); e.target.value = '' }} />
-    </div>
-  )
-  const onDrop = async (e: DragEvent) => {
-    e.preventDefault(); setOver(false)
-    if (!state.trusted) { setProblem('Set the trusted release first, so there is something to compare with.'); return }
-    try { const { files, name } = await droppedFiles(e.dataTransfer); send(files, name) }
-    catch { setProblem('That could not be read. Try choosing the folder or the zip with the buttons instead.') }
-  }
-  // A drop anywhere on the page counts, so nobody has to aim.
+  const addBefore = adder(setBefore), addAfter = adder(setAfter)
+  const canCompare = after.files.length > 0 && (before.files.length > 0 || !!state.trusted) && !busy
+  const compare = () => run(async () => {
+    setBusy('Reading')
+    if (before.files.length) await uploadRelease(before.files, before.name || 'before', state.files, setBusy, 'trusted')
+    return uploadRelease(after.files, after.name || 'after', state.files, setBusy)
+  })
+  // A drop anywhere on the page adds to the After side, so nobody has to aim.
   useEffect(() => {
-    const enter = (e: globalThis.DragEvent) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); setOver(true); setOpen(true) } }
-    const leave = (e: globalThis.DragEvent) => { if (!e.relatedTarget) setOver(false) }
-    window.addEventListener('dragover', enter); window.addEventListener('dragleave', leave)
-    return () => { window.removeEventListener('dragover', enter); window.removeEventListener('dragleave', leave) }
-  }, [])
+    const enter = (e: globalThis.DragEvent) => { if (e.dataTransfer?.types.includes('Files')) { e.preventDefault(); setOpen(true) } }
+    const dropped = async (e: globalThis.DragEvent) => {
+      if (!e.dataTransfer?.types.includes('Files') || (e.target as HTMLElement | null)?.closest?.('.side')) return
+      e.preventDefault()
+      try { const got = await droppedFiles(e.dataTransfer); addAfter(got.files, got.name) } catch { setProblem('That could not be read. Use the Choose buttons instead.') }
+    }
+    window.addEventListener('dragover', enter); window.addEventListener('drop', dropped)
+    return () => { window.removeEventListener('dragover', enter); window.removeEventListener('drop', dropped) }
+  }, [state.files])   // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!open && state.new) {
     return (
@@ -655,52 +690,42 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
     )
   }
   return (
-    <section className="release-box" aria-label="Compare a new release">
+    <section className="release-box" aria-label="Compare two releases">
       <div className="block-row">
-        <h2 className="block-title">Compare a new release</h2>
+        <h2 className="block-title">Compare two releases</h2>
         {state.new && <button type="button" className="link" onClick={() => setOpen(false)}>Close</button>}
       </div>
-      {state.trusted
-        ? <>
-            <p className="block-sub">It will be compared with the trusted release <code>{state.trusted_name}</code>. <button type="button" className="link" onClick={() => setPickTrusted(v => !v)}>Use a different trusted release</button></p>
-            {pickTrusted && trustedChooser}
-          </>
-        : (<>
-          {trustedChooser}
-          <form className="path-row" onSubmit={e => { e.preventDefault(); if (trusted.trim()) run(() => setRelease({ trusted: trusted.trim() })) }}>
-            <label htmlFor="trusted-path">Or paste the trusted release's folder path</label>
-            <input id="trusted-path" value={trusted} onChange={e => setTrusted(e.target.value)} placeholder="/path/to/oncosys-hackathon-challenge/data/tcga-brca/raw" spellCheck={false} />
-            <button type="submit" className="primary" disabled={!trusted.trim()}>Use this</button>
-          </form>
-        </>)}
-      <div className={`drop${over ? ' over' : ''}${busy ? ' busy' : ''}`} onDragOver={e => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
-        {busy
-          ? <p className="drop-main" role="status">{busy}…</p>
-          : <>
-              <p className="drop-main">Drop the new release (the "after") here</p>
-              <p className="quiet">A folder, a zip, or all of its files at once (select several). Anywhere on this page works.</p>
-              <p className="drop-buttons">
-                <button type="button" className="ghost" disabled={!state.trusted} onClick={() => folderInput.current?.click()}>Choose a folder</button>
-                <button type="button" className="ghost" disabled={!state.trusted} onClick={() => filesInput.current?.click()}>Choose its files</button>
-                <button type="button" className="ghost" disabled={!state.trusted} onClick={() => zipInput.current?.click()}>Choose a zip</button>
-              </p>
-            </>}
-        <input ref={folderInput} type="file" hidden multiple {...{ webkitdirectory: '' }} onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) send(f, (f[0].webkitRelativePath || '').split('/')[0] || 'new-release'); e.target.value = '' }} />
-        <input ref={filesInput} type="file" hidden multiple onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) send(f, 'new-release'); e.target.value = '' }} />
-        <input ref={zipInput} type="file" hidden accept=".zip" onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) send(f, f[0].name); e.target.value = '' }} />
+      <p className="block-sub">Put the trusted release on the left and the new one on the right, then press Compare. Add as many files as each has; the two sides can hold files with the same names. Nothing runs until you press Compare.</p>
+      <div className="sides">
+        <SideBox id="before" title="Before: the trusted release" hint="The version your results were made with." staged={before} using={state.trusted_name} busy={!!busy}
+          onAdd={addBefore} onRemove={n => setBefore(o => ({ ...o, files: o.files.filter(f => f.name !== n) }))} onClear={() => setBefore({ files: [], name: '' })} />
+        <SideBox id="after" title="After: the new release" hint="The version you want to check. Dropping files anywhere on the page adds them here." staged={after} busy={!!busy}
+          onAdd={addAfter} onRemove={n => setAfter(o => ({ ...o, files: o.files.filter(f => f.name !== n) }))} onClear={() => setAfter({ files: [], name: '' })} />
       </div>
-      <form className="path-row" onSubmit={e => { e.preventDefault(); if (path.trim()) { setBusy('Comparing'); run(() => setRelease({ path: path.trim() })) } }}>
-        <label htmlFor="new-path">Or paste the path to its folder or zip</label>
-        <input id="new-path" value={path} onChange={e => setPath(e.target.value)} placeholder="/Users/you/Desktop/hidden-release" spellCheck={false} disabled={!state.trusted} />
-        <button type="submit" className="primary" disabled={!path.trim() || !state.trusted || !!busy}>Compare</button>
-      </form>
+      <p className="compare-row">
+        <button type="button" className="primary big-compare" disabled={!canCompare} onClick={compare}>{busy ? `${busy}…` : 'Compare'}</button>
+        {!busy && !canCompare && <span className="quiet">{after.files.length === 0 ? 'Add the new release on the right.' : 'Add the trusted release on the left.'}</span>}
+      </p>
+      {problem && <p className="error inline" role="alert">{problem}</p>}
       <form className="path-row envelope-row" onSubmit={e => { e.preventDefault(); if (envelope.trim() && code.trim()) { setBusy('Opening the envelope'); run(() => openEnvelope(envelope.trim(), code.trim())) } }}>
         <label htmlFor="envelope-number">Or open a sealed envelope: its number and its four words</label>
         <input id="envelope-number" className="short" value={envelope} onChange={e => setEnvelope(e.target.value)} placeholder="07" spellCheck={false} autoComplete="off" />
         <input id="envelope-code" value={code} onChange={e => setCode(e.target.value)} placeholder="amber falcon river quartz" spellCheck={false} autoComplete="off" aria-label="The four words" />
         <button type="submit" className="primary" disabled={!envelope.trim() || code.trim().split(/\s+/).length !== 4 || !!busy}>Open and compare</button>
       </form>
-      {problem && <p className="error inline" role="alert">{problem}</p>}
+      <details className="dev-mode">
+        <summary>Or give paths on this computer</summary>
+        <form className="path-row" onSubmit={e => { e.preventDefault(); if (trusted.trim()) run(() => setRelease({ trusted: trusted.trim() })) }}>
+          <label htmlFor="trusted-path">The trusted release's folder</label>
+          <input id="trusted-path" value={trusted} onChange={e => setTrusted(e.target.value)} placeholder="/path/to/oncosys-hackathon-challenge/data/tcga-brca/raw" spellCheck={false} />
+          <button type="submit" className="primary" disabled={!trusted.trim() || !!busy}>Use this</button>
+        </form>
+        <form className="path-row" onSubmit={e => { e.preventDefault(); if (path.trim()) { setBusy('Comparing'); run(() => setRelease({ path: path.trim() })) } }}>
+          <label htmlFor="new-path">The new release's folder or zip</label>
+          <input id="new-path" value={path} onChange={e => setPath(e.target.value)} placeholder="/Users/you/Desktop/hidden-release" spellCheck={false} disabled={!state.trusted} />
+          <button type="submit" className="primary" disabled={!path.trim() || !state.trusted || !!busy}>Compare</button>
+        </form>
+      </details>
       <History state={state} onLoaded={onLoaded} />
       <details className="dev-mode">
         <summary>Developer mode</summary>
@@ -913,6 +938,7 @@ export default function App() {
           release={state && <ReleaseBox key={`${state.trusted}|${state.new}`} state={state} onLoaded={onLoaded} />} /></div></SectionBoundary>}
       </main>
       {raw && valid && !usingExample && !(state?.trusted && !state.new) && <Ask asked={asked} onChanged={() => load(asked)} canUseModel={state?.ai_understanding} voice={!!state?.voice} offerKey={state !== null && state.ai_understanding !== undefined} />}
+      <DataView />
       <footer>Built by team Automyte. De-identified TCGA research data. Research use only, not a clinical tool.</footer>
     </>
   )

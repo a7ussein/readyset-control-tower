@@ -52,6 +52,19 @@ def use(batch, name, as_trusted):
     return json.dumps({"status": 200, "body": json.loads(current())})
 
 
+def cells_of(finding):
+    """The cells behind one finding, read from the two chosen releases (control_tower/cells.py)."""
+    from control_tower.cells import cells
+    trusted, new = state["trusted"], state["new"]
+    if not (trusted and new):
+        return json.dumps({"status": 400, "body": {"detail": "choose both releases first"}})
+    got = json.loads(findings(""))
+    if got["status"] != 200:
+        return json.dumps(got)
+    view = cells(trusted, new, got["body"], str(finding))
+    return json.dumps({"status": 400 if "detail" in view else 200, "body": view})
+
+
 def findings(wanted):
     """The findings for the question asked ("" = every registered analysis), as the tool's own page would get them."""
     trusted, new = state["trusted"], state["new"]

@@ -2,6 +2,7 @@
 // findings by fixed patterns. No language model. Every answer shows how it was reached and a fingerprint that is
 // the same every time the same question is asked of the same findings.
 import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { showData } from './DataView'
 import { askQuestion, saveReview, setModelKey, spokenAudio, type AskReply } from './api'
 
 const STARTERS = ['Can I use the new release?', 'Why does it matter for my results?', 'What should I do next?',
@@ -149,6 +150,7 @@ export function Ask({ asked, onChanged, canUseModel, offerKey, voice }: { asked?
                           </table>
                         )}
                         {!s.check && s.samples.length > 0 && <p className="ask-ids">{s.samples.slice(0, 12).join(', ')}{s.samples.length > 12 ? ` and ${s.samples.length - 12} more` : ''}</p>}
+                        <button type="button" className="ask-show" onClick={() => showData(s.finding)}>See the data in both files</button>
                         <button type="button" className="ask-show" onClick={() => show(s.finding)}>Show {s.finding} on the page</button>
                       </details>
                     ))}

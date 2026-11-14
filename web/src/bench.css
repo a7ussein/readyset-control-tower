@@ -263,3 +263,34 @@ article.panel.pointed { outline: 3px solid var(--point); outline-offset: 6px; bo
 
 .trusted-choose { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--raised); display: flex; flex-direction: column; gap: 8px; font-size: 14.5px }
 .trusted-choose .drop-buttons { display: flex; gap: 10px; flex-wrap: wrap }
+
+/* ---- The data itself: both files, side by side ---- */
+.data-back { position: fixed; inset: 0; z-index: 60; background: rgb(20 18 43 / .55); display: flex; align-items: center; justify-content: center; padding: 20px }
+.data-view { width: min(1180px, 100%); max-height: calc(100vh - 40px); display: flex; flex-direction: column; gap: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px 20px; box-shadow: var(--shadow) }
+.data-view > header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start }
+.data-view h2 { font: 700 20px/1.25 var(--display) } .data-view header p { color: var(--muted); font-size: 14px; margin-top: 4px }
+.data-view code { font-family: var(--mono); font-size: .92em }
+.data-note { background: var(--conditional-tint); border-left: 3px solid var(--conditional); padding: 8px 12px; border-radius: 0 8px 8px 0; font-size: 14px }
+.data-count { font-size: 14px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center } .data-count label { color: var(--ink); display: inline-flex; gap: 6px; align-items: center }
+.data-scroll { overflow: auto; border: 1px solid var(--line); border-radius: 10px; min-height: 0 }
+.data-scroll table { border-collapse: collapse; font: 400 12.5px var(--mono); font-variant-numeric: tabular-nums; width: max-content; min-width: 100% }
+.data-scroll th, .data-scroll td { padding: 5px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap }
+.data-scroll thead th { position: sticky; top: 0; background: var(--raised); z-index: 1; font-weight: 600 } .data-scroll thead tr:nth-child(2) th { top: 27px; color: var(--muted); font-weight: 500 }
+.data-scroll th.sample { text-align: center; border-left: 2px solid var(--line) } .data-scroll td:nth-child(even), .data-scroll th.rel:nth-child(odd) { border-left: 2px solid var(--line) }
+.data-scroll tbody th { text-align: left; position: sticky; left: 0; background: var(--surface); font-weight: 600 } .data-scroll thead th:first-child { text-align: left; left: 0; z-index: 2 }
+.data-scroll td.was { background: var(--insufficient-tint) } .data-scroll td.now { background: var(--point-tint); color: var(--point-ink); font-weight: 600 }
+.data-scroll .absent { color: var(--faint); font-family: var(--text); font-style: italic }
+.ask-source .ask-show { margin-right: 14px }
+.see-data { margin-top: 10px }
+
+/* ---- Before and After: two sides, collected, then compared ---- */
+.sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px }
+.side { border: 2px dashed var(--line); border-radius: 16px; padding: 16px 18px; background: var(--raised); display: flex; flex-direction: column; gap: 8px; min-width: 0 }
+.side.over { border-color: var(--brand); background: var(--brand-tint) }
+.side h3 { font: 700 17px/1.25 var(--display) } .side-using { font-size: 14.5px } .side-using code { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px }
+.staged { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13.5px }
+.staged li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: baseline; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px }
+.staged code { font-family: var(--mono); overflow-wrap: anywhere } .staged span { color: var(--muted); font-variant-numeric: tabular-nums }
+.side .drop-buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px } .side .drop-buttons .ghost { padding: 8px 12px; font-size: 14px }
+.compare-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap } .big-compare { padding: 13px 34px; font-size: 16px } .big-compare:disabled { opacity: .5 }
+@media (max-width: 720px) { .sides { grid-template-columns: minmax(0, 1fr) } }
