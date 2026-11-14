@@ -52,7 +52,7 @@ const VERDICT: Record<string, { tone: string; mark: string; means: string }> = {
 }
 const STATUS: Record<string, string> = { changed: 'result changed', unchanged: 'rerun, same result', not_rerun: 'untouched' }
 const FILE_STATUS: Record<string, string> = {
-  changed: 'content differs', unchanged: 'identical, not opened', absent: 'in neither release',
+  changed: 'content differs', unchanged: 'identical: every byte was read and matches', absent: 'in neither release',
   missing_in_one: 'missing in one release', not_in_both: 'in only one release; not needed, so not compared', unreadable: 'could not be read',
 }
 
@@ -414,7 +414,7 @@ function FilesAndDownload({ raw, doc }: { raw: Findings; doc: Doc }) {
                 <td>{FILE_STATUS[f.status] ?? words(f.status)}</td></tr>
             ))}</tbody>
           </table>
-          <p className="quiet">A file whose content is identical in both releases is never opened.</p>
+          <p className="quiet">Every file is read in full in both releases. When the whole content matches byte for byte, the file is identical and there is nothing inside it left to compare.</p>
         </div>
         <div className="card">
           <h3>The report, in two forms</h3>

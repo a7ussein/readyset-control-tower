@@ -19,7 +19,7 @@ MEANS = {
 }
 STATUS = {"changed": "was rerun and its result changed", "unchanged": "was rerun and its result is the same",
           "not_rerun": "was not rerun, because nothing it reads changed"}
-FILE_STATUS = {"changed": "content differs", "unchanged": "identical, not opened", "absent": "in neither release",
+FILE_STATUS = {"changed": "content differs", "unchanged": "identical: every byte was read and matches", "absent": "in neither release",
                "missing_in_one": "missing in one release", "not_in_both": "in only one release; not needed, so not compared",
                "unreadable": "could not be read"}
 
@@ -212,7 +212,7 @@ def render(doc):
                 hashes.setdefault(fl.get("file"), {})[rel.get("name")] = fl.get("sha256", "")
         rows = [[f.get("file"), FILE_STATUS.get(f.get("status"), f.get("status")) + (". " + f["note"] if f.get("note") else ""),
                  (hashes.get(f.get("file"), {}).get(a_name) or "")[:16], (hashes.get(f.get("file"), {}).get(b_name) or "")[:16]] for f in files]
-        out.append("<h2>The files</h2><p>A file whose content hash is the same in both releases is identical and was not opened. "
+        out.append("<h2>The files</h2><p>Every file is read in full in both releases and its whole content is reduced to a fingerprint (a SHA-256 hash). When the two fingerprints match, the file is identical byte for byte, so there is nothing further to compare inside it. "
                    "The first 16 characters of each SHA-256 content hash are shown; the full values are in findings.json.</p>"
                    + table(["file", "status", f"hash in {a_name}", f"hash in {b_name}"], rows))
 

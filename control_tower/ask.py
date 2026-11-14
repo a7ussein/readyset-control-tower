@@ -338,7 +338,7 @@ def ask(doc, text, actor=None, router=None):
         read = ["x_readyset.rules (detected_by)"]
 
     elif intent == "files":
-        label = {"changed": "content differs", "unchanged": "identical, not opened", "absent": "in neither release",
+        label = {"changed": "content differs", "unchanged": "identical: every byte was read and matches", "absent": "in neither release",
                  "missing_in_one": "missing in one release", "not_in_both": "in only one release, not needed, so not compared",
                  "unreadable": "could not be read"}
         files = [f for f in x.get("files", []) if isinstance(f, dict)]
