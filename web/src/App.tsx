@@ -881,6 +881,9 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
         <p className="means">{verdict === 'Ready' && doc.findings.length > 0
           ? `Nothing these analyses read has changed. ${plural(doc.findings.length, 'change')} elsewhere in the release ${doc.findings.length === 1 ? 'is' : 'are'} listed below: real problems in the data, but not for these analyses.`
           : tone.means}</p>
+        {(verdict === 'Insufficient Evidence' || verdict === 'Blocked') && doc.findings.filter(f => /could not be read|cannot be compared for this file|shape of/.test(text(f.summary))).slice(0, 2).map(f => (
+          <p key={f.id} className="means-why"><strong>Why:</strong> {text(f.summary).replace(/^.*so the two releases cannot be compared for this file\.\s*/, '')}</p>
+        ))}
         <p className="facts">
           <span className="verdict-chip">Verdict: {verdict || 'none'}</span>
           {doc.files.length > 0 && <span>{changed.length === 0 ? `All ${compared} compared files are identical`

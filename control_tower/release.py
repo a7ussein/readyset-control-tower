@@ -78,7 +78,14 @@ def _encoding(path):
     elif head[:3] == b"\xef\xbb\xbf":
         found = "utf-8-sig"
     elif b"\x00" in head[:4096]:
-        raise Unreadable(f"{name} is not a text table: it holds binary data. Give the tab-separated text file")
+        sample = head[:4096]
+        even, odd = sample[0::2].count(0), sample[1::2].count(0)
+        if odd > len(sample) // 4 and even < len(sample) // 40:
+            found = "utf-16-le"                       # plain text in UTF-16 has a zero after every ordinary letter
+        elif even > len(sample) // 4 and odd < len(sample) // 40:
+            found = "utf-16-be"
+        else:
+            raise Unreadable(f"{name} is not a text table: it holds binary data. Give the tab-separated text file")
     else:
         try:
             head.decode("utf-8")
@@ -122,15 +129,42 @@ def _as_table(path):
             except zipfile.BadZipFile:
                 pass
         elif magic[:2] != b"\x1f\x8b" and key[2] < (64 << 20):
-            with open(path, "r", newline="", encoding=_encoding(path), errors="replace") as fh:
-                first = fh.readline()
-                if "\t" not in first and ("," in first or ";" in first):
+            encoding = _encoding(path)
+            with open(path, "r", newline="", encoding=encoding, errors="replace") as fh:
+                top = [fh.readline() for _ in range(6)]
+                first = next((line for line in top if line.strip()), "")
+                delimiter = "\t" if "\t" in "".join(top) else ("," if first.count(",") >= first.count(";") and "," in first else
+                                                              (";" if ";" in first else "\t"))
+                cells = [[c.strip() for c in line.rstrip("\r\n").split(delimiter)] for line in top if line.strip()]
+                titled = len(cells) > 1 and sum(1 for c in cells[0] if c) <= 1 and sum(1 for c in cells[1] if c) > 1
+                padded = bool(cells) and len(cells[0]) > 1 and cells[0][-1] == ""
+                if delimiter != "\t" or titled or padded or encoding.startswith("utf-16") or not top[0].strip():
                     fh.seek(0)
-                    out = _scratch(name, csv.reader(fh, delimiter="," if first.count(",") >= first.count(";") else ";"))
+                    out = _scratch(name, _tidy(csv.reader(fh, delimiter=delimiter)))
     except OSError as e:
         raise Unreadable(f"{name} could not be read: {e}")
     _tables[key] = out
     return out
+
+
+def _tidy(rows):
+    """A table as a spreadsheet program exports it, back to the table: a title line above the header is dropped (one
+    filled cell, then the real header below it), as are rows that are entirely empty and the columns on the right that
+    have no header and hold nothing. No cell that holds anything is changed."""
+    rows = [list(r) for r in rows]
+    while rows and not any(c.strip() for c in rows[0]):
+        rows.pop(0)
+    if len(rows) > 1 and sum(1 for c in rows[0] if c.strip()) <= 1 and sum(1 for c in rows[1] if c.strip()) > 1:
+        rows.pop(0)                                              # the table's name, written above its header
+    rows = [r for r in rows if any(c.strip() for c in r)]
+    if not rows:
+        return rows
+    width = len(rows[0])
+    while width > 1 and not rows[0][width - 1].strip() and not any(len(r) >= width and r[width - 1].strip() for r in rows):
+        width -= 1
+    if rows[0] and rows[0][0].startswith("\ufeff"):
+        rows[0][0] = rows[0][0].lstrip("\ufeff")
+    return [r[:width] if len(r) > width and not any(c.strip() for c in r[width:]) else r for r in rows]
 
 
 def _scratch(name, rows):
@@ -239,7 +273,7 @@ def layout(path):
         with _open_text(path) as fh:
             reader = csv.reader(fh, delimiter="\t")
             header = next(reader, None)
-            first = next((line for line in reader if line), None)        # the first line that is not blank
+            first = next((line for line in reader if any(c.strip() for c in line)), None)   # the first line holding anything
     except (OSError, EOFError, UnicodeDecodeError, csv.Error) as e:
         raise Unreadable(f"{os.path.basename(path)} could not be read: {e}")
     if not header:
@@ -266,8 +300,8 @@ def read_rows(path):
             columns = header[1:]
             table = {}
             for line in reader:
-                if not line:
-                    continue
+                if not any(c.strip() for c in line):
+                    continue                                    # a line with nothing in it is not a sample
                 cells = line[1:] + [""] * (len(columns) - len(line) + 1)
                 table[line[0]] = dict(zip(columns, cells))
     except (OSError, EOFError, UnicodeDecodeError, csv.Error, StopIteration) as e:
@@ -284,8 +318,10 @@ def repeated_ids(path):
         with _open_text(path) as fh:
             reader = csv.reader(fh, delimiter="\t")
             header = next(reader, None) or []
-            ids = header[1:] if kind != "row" else (line[0] for line in reader if line)
+            ids = header[1:] if kind != "row" else (line[0] for line in reader if any(c.strip() for c in line))
             for i in ids:
+                if not i.strip():
+                    continue
                 if i in seen and i not in twice:
                     twice.append(i)
                 seen.add(i)

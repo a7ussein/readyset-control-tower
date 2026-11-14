@@ -188,6 +188,37 @@ class EmptyInputs(unittest.TestCase):
         repeated_column = self.changed(PROTEIN, lambda text: "\n".join(l + "\t" + l.split("\t")[1] if l else l for l in text.split("\n")))
         self.assertIn("appears more than once", repeated_column["findings"][0]["summary"])
 
+    def test_a_table_exported_from_a_spreadsheet_program_is_read_as_the_table_it_is(self):
+        # What Numbers or Excel put around a table when exporting it as text: none of it changes a value.
+        def export(change):
+            def apply(text):
+                rows = [line.split("\t") for line in text.split("\n") if line]
+                return change(rows)
+            return apply
+        join = lambda rows, end="\n": end.join("\t".join(r) for r in rows) + end
+        exports = {
+            "a title line above the header": lambda rows: "clinical\n" + join(rows),
+            "empty columns on the right": lambda rows: join([r + ["", ""] for r in rows]),
+            "empty rows at the end": lambda rows: join(rows + [[""] * len(rows[0])] * 4),
+            "a blank first line": lambda rows: "\n" + join(rows),
+            "old Mac line endings": lambda rows: join(rows, "\r"),
+            "Windows line endings": lambda rows: join(rows, "\r\n"),
+        }
+        for name, change in exports.items():
+            doc = self.changed(CLINICAL, export(change))
+            self.assertEqual((doc["verdict"], doc["findings"]), ("Ready", []), name)
+        for encoding in ("utf-16", "utf-16-le", "utf-16-be"):
+            d = tempfile.mkdtemp()
+            a = TinyRelease()
+            folder_a, folder_b = a.write(os.path.join(d, "A")), a.copy().write(os.path.join(d, "B"))
+            path = os.path.join(folder_b, CLINICAL)
+            with open(path, encoding="utf-8") as fh:
+                text = fh.read()
+            with open(path, "wb") as fh:
+                fh.write(("clinical\r\n" + text.replace("\n", "\r\n")).encode(encoding))
+            doc = compare(folder_a, folder_b)
+            self.assertEqual((doc["verdict"], doc["findings"]), ("Ready", []), encoding)
+
 
 if __name__ == "__main__":
     unittest.main()
