@@ -86,6 +86,7 @@ export const addAnalysis = async (spec: Record<string, unknown>) => json<{ id: s
 export interface AskReply {
   question: string; can_answer: boolean; understood_as: string | null; intent: string | null; answer: string[]
   trace: { step: string; detail: string }[]; suggestions: string[]; fingerprint: string; based_on: string
+  sources: { finding: string; file: string; samples: string[]; check?: { row: string; releases: string[]; values: { sample: string; before: string; after: string }[] } }[]
   action: { finding: string; key: string; status: 'confirmed' | 'dismissed'; fix: 'approved' | ''; reviewer: string; role: string; note: string } | null
   consistency?: { asked: number; different_answers: number; fingerprint: string }
 }

@@ -69,6 +69,19 @@ export function Ask({ asked, onChanged }: { asked?: string[]; onChanged: () => v
     try { r.start() } catch { setListening(false) }
   }
 
+  // A source is a place on the page: go to that change, and mark it so the eye lands on it.
+  const show = (finding: string) => {
+    location.hash = finding
+    if (window.innerWidth < 900) setOpen(false)
+    setTimeout(() => {
+      const panel = document.querySelector('article.panel')
+      if (!panel) return
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      panel.classList.add('pointed')
+      setTimeout(() => panel.classList.remove('pointed'), 2600)
+    }, 80)
+  }
+
   if (!open) return <button type="button" className="ask-open" onClick={() => setOpen(true)}>Ask about this release</button>
   return (
     <section className="ask" aria-label="Ask about this release">
@@ -105,6 +118,24 @@ export function Ask({ asked, onChanged }: { asked?: string[]; onChanged: () => v
                 )}
                 {t.recorded === 'yes' && <p className="ask-done">Recorded in your name. It is now in the findings file and the audit report.</p>}
                 {t.recorded === 'failed' && <p className="error inline" role="alert">It could not be recorded.</p>}
+                {t.reply.sources.length > 0 && (
+                  <div className="ask-sources">
+                    <p className="ask-as">Sources: open one to check it yourself</p>
+                    {t.reply.sources.map(s => (
+                      <details key={s.finding} className="ask-source">
+                        <summary><strong>{s.finding}</strong> <code>{s.file}</code>{s.samples.length > 0 && <span> {s.samples.length} {s.samples.length === 1 ? 'sample' : 'samples'}</span>}</summary>
+                        {s.check && (
+                          <table>
+                            <thead><tr><th>{s.check.row}</th><th>{s.check.releases[0]}</th><th>{s.check.releases[s.check.releases.length - 1]}</th></tr></thead>
+                            <tbody>{s.check.values.map(v => <tr key={v.sample} className={v.before !== v.after ? 'moved' : undefined}><th>{v.sample}</th><td>{v.before}</td><td>{v.after}</td></tr>)}</tbody>
+                          </table>
+                        )}
+                        {!s.check && s.samples.length > 0 && <p className="ask-ids">{s.samples.slice(0, 12).join(', ')}{s.samples.length > 12 ? ` and ${s.samples.length - 12} more` : ''}</p>}
+                        <button type="button" className="ask-show" onClick={() => show(s.finding)}>Show {s.finding} on the page</button>
+                      </details>
+                    ))}
+                  </div>
+                )}
                 <details>
                   <summary>How I got this answer</summary>
                   <ol className="ask-trace">{t.reply.trace.map((s, i) => <li key={i}><strong>{s.step}.</strong> {s.detail}</li>)}</ol>
