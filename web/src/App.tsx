@@ -343,7 +343,7 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step, waiti
             : first
               ? `${first.id} (${doc.titles[first.id] ?? 'your analysis'}) gives a different answer: on its own this change moves its ${words(first.e?.measure) || 'result'} by ${percent(first.e?.moved_by)}.`
               : `It reaches ${affected.join(' and ')}, which ${affected.length === 1 ? 'reads' : 'read'} what changed here.`
-          return <p className="so-what"><strong>So what?</strong> {consequence}{affected.length > 0 && urgency ? ` Deal with it ${urgency === 'before use' ? 'before you use this release' : `(${urgency})`}.` : ''}</p>
+          return <p className="so-what"><strong>So what?</strong> {consequence}{affected.length > 0 && urgency ? (urgency === 'before use' ? ' Deal with it before you use this release.' : ` That is a ${urgency}: the suggested fix below says what to check.`) : ''}</p>
         })()}
       </header>
 
