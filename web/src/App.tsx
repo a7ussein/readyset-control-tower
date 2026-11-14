@@ -8,6 +8,7 @@ import { useTheme } from './theme'
 import { SectionBoundary } from './SectionBoundary'
 import { Ask } from './Ask'
 import { DataView, showData } from './DataView'
+import { Method, showMethod } from './Method'
 
 // ---- reading a file that may be malformed --------------------------------------------------------------------------
 const list = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v.filter(x => x && typeof x === 'object' && !Array.isArray(x)) as T[]) : [])
@@ -696,11 +697,26 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
     catch (e) { setBusy(''); setProblem(e instanceof Error ? e.message : String(e)) }
   }
   // Files are collected, not sent: a release is usually several files, and the two sides may hold files of the same name.
-  const adder = (set: (change: (old: Staged) => Staged) => void) => (files: File[], name: string) => {
+  const [taken, setTaken] = useState('')
+  const adder = (set: (change: (old: Staged) => Staged) => void, other: () => Staged) => (files: File[], name: string) => {
     const isZip = (f: File) => f.name.toLowerCase().endsWith('.zip')
     // A packed file that someone unpacked to edit keeps its place: x.tsv stands in for x.tsv.gz.
     const stem = (n: string) => n.replace(/\.gz$/i, '').replace(/\.(tsv|csv|xlsx|txt|numbers)$/i, '').toLowerCase()
-    const proper = (n: string) => state.files.find(f => f === n) ?? state.files.find(f => stem(f) === stem(n)) ?? ''
+    // People rename files: "clinical updated.csv", "protein v2.xlsx". The word that says which table it is decides.
+    const words: [RegExp, string][] = [[/clinic/, 'clinical'], [/surviv/, 'survival'], [/mutation/, 'mutation_gene_level'], [/protein|rppa/, 'protein_rppa'],
+      [/copy.?number|gistic|cnv/, 'copy_number_gistic'], [/rna|hiseq|expression/, 'rna_hiseq']]
+    const guesses: string[] = []
+    const loose = files.filter(f => !isZip(f) && !f.name.startsWith('.') && !state.files.some(k => k === f.name || stem(k) === stem(f.name)))
+    const byWord = (n: string) => { const hit = words.filter(([re]) => re.test(stem(n))); return hit.length === 1 ? state.files.find(k => stem(k) === hit[0][1]) ?? '' : '' }
+    // One file on each side is a person comparing two versions of one table, whatever the second is called.
+    const lone = other().files.length === 1 && !isZip(other().files[0]) && files.filter(f => !isZip(f) && !f.name.startsWith('.')).length === 1 ? other().files[0].name : ''
+    const proper = (n: string) => {
+      const exact = state.files.find(f => f === n) ?? state.files.find(f => stem(f) === stem(n))
+      if (exact) return exact
+      const guess = byWord(n) || (loose.length === 1 ? lone : '')
+      if (guess) guesses.push(`${n} is taken as ${guess}`)
+      return guess
+    }
     const byName = new Map<string, File>()
     const both: string[] = []
     for (const f of files) {
@@ -712,9 +728,10 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
       if (!had || f.lastModified >= had.lastModified) byName.set(n, f.name === n ? f : new File([f], n, { type: f.type, lastModified: f.lastModified }))
     }
     const wanted = [...byName.values()]
-    const left = files.filter(f => !isZip(f) && !proper(f.name)).map(f => f.name).filter(n => !n.startsWith('.'))
+    const left = files.filter(f => !isZip(f) && !f.name.startsWith('.') && ![...byName.values()].some(k => k === f || (k.size === f.size && k.lastModified === f.lastModified))).map(f => f.name)
+    setTaken([...new Set(guesses)].join('. ') + (guesses.length ? '.' : ''))
     setProblem(left.length && wanted.length === 0
-      ? `None of those is one of a release's files. A release's files are named ${state.files.map(f => f.replace(/\.tsv(\.gz)?$/, '')).join(', ')} (as .tsv, .csv or .xlsx), or give a zip of them.`
+      ? `None of those is one of a release's files. A release's files are named ${state.files.map(f => f.replace(/\.tsv(\.gz)?$/, '')).join(', ')} (as .tsv, .csv or .xlsx; a name that contains one of those words works too), or give a zip of them.`
       : [left.length ? `Left out, because ${left.length === 1 ? 'it is not one' : 'they are not'} of a release's files: ${left.slice(0, 6).join(', ')}.` : '',
          both.length ? `Both a packed and an unpacked copy of ${both.join(', ')} were there. The one changed most recently was used.` : ''].filter(Boolean).join(' '))
     if (wanted.length === 0) return
@@ -725,7 +742,7 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
       return { files: [...kept, ...wanted], name: name || old.name }
     })
   }
-  const addBefore = adder(setBefore), addAfter = adder(setAfter)
+  const addBefore = adder(setBefore, () => after), addAfter = adder(setAfter, () => before)
   const canCompare = after.files.length > 0 && (before.files.length > 0 || !!state.trusted) && !busy
   const compare = () => run(async () => {
     setBusy('Reading')
@@ -770,6 +787,7 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
         <button type="button" className="primary big-compare" disabled={!canCompare} onClick={compare}>{busy ? `${busy}…` : 'Compare'}</button>
         {!busy && !canCompare && <span className="quiet">{after.files.length === 0 ? 'Add the new release on the right.' : 'Add the trusted release on the left.'}</span>}
       </p>
+      {taken && <p className="taken-note" role="status">{taken} Rename it if that is wrong.</p>}
       {problem && <p className="error inline" role="alert">{problem}</p>}
       <form className="path-row envelope-row" onSubmit={e => { e.preventDefault(); if (envelope.trim() && code.trim()) { setBusy('Opening the envelope'); run(() => openEnvelope(envelope.trim(), code.trim())) } }}>
         <label htmlFor="envelope-number">Or open a sealed envelope: its number and its four words</label>
@@ -870,6 +888,21 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
                 `${changed.filter(f => f.status === k).length} of ${compared} files ${k === 'changed' ? 'changed' : k === 'unreadable' ? 'unreadable' : 'missing from one release'}: ${changed.filter(f => f.status === k).map(f => f.file.replace(/\.tsv(\.gz)?$/, '')).join(', ')}`).join('; ')}</span>}
           {doc.findings.length > 0 && touching < doc.findings.length && <span>{doc.findings.length - touching} {doc.findings.length - touching === 1 ? 'change does' : 'changes do'} not reach your analyses</span>}
           {doc.notes.map((n, i) => <span key={i} className={/not compared/.test(n) ? undefined : 'warn'}>{/not compared/.test(n) ? n.split('. ')[0].replace(/ is in .* but not in .*/, ' is not in the new release and is not needed') : n}</span>)}
+        </p>
+        <p className="basis">
+          {(() => {
+            const when = text(raw.x_readyset?.generated_at)
+            const d = when ? new Date(when) : null
+            const same = doc.files.filter(f => f.status === 'unchanged').length
+            const rerun = doc.analyses.filter(a => a.status === 'changed' || a.status === 'unchanged').length
+            return <>
+              {d && !isNaN(d.getTime()) && <span>Checked {d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}{typeof raw.x_readyset?.run_seconds === 'number' ? `, in ${raw.x_readyset.run_seconds} s` : ''}.</span>}
+              {compared > 0 && <span>{plural(compared, 'file')} read in full{same > 0 ? `, ${same} identical byte for byte` : ''}.</span>}
+              {rerun > 0 && <span>{plural(rerun, 'result')} rerun on both releases, not estimated.</span>}
+              <span>No AI wrote this answer.</span>
+            </>
+          })()}
+          <button type="button" className="link" onClick={showMethod}>How it works and how it was tested</button>
         </p>
       </section>
 
@@ -1003,7 +1036,12 @@ export default function App() {
       </main>
       {raw && valid && !usingExample && !(state?.trusted && !state.new) && <Ask asked={asked} onChanged={() => load(asked)} canUseModel={state?.ai_understanding} voice={!!state?.voice} offerKey={state !== null && state.ai_understanding !== undefined} />}
       <DataView />
-      <footer>Built by team Automyte. De-identified TCGA research data. Research use only, not a clinical tool.</footer>
+      <Method version={text(raw?.x_readyset?.engine_version)} />
+      <footer>
+        <p><strong>ReadySet Control Tower</strong>{raw?.x_readyset?.engine_version ? `, engine ${text(raw.x_readyset.engine_version)}` : ''}. Built by team Automyte (Ahmed Hussein, Ordi, James) for the OncoSys Cancer AI Lab, November 2026.</p>
+        <p>Open source under Apache-2.0: <a href="https://github.com/a7ussein/readyset-control-tower" target="_blank" rel="noreferrer">the code, the tests and the method</a>. <button type="button" className="link" onClick={showMethod}>How it works and how it was tested</button></p>
+        <p>Data: TCGA breast cancer (TCGA-BRCA), de-identified. Research use only. Not a clinical tool: it makes no diagnosis, treatment advice or risk score.</p>
+      </footer>
     </>
   )
 }

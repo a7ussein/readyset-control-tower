@@ -275,6 +275,25 @@ def read_rows(path):
     return columns, table
 
 
+def repeated_ids(path):
+    """Sample ids that appear more than once in a file: twice as a row, or twice in the header. A table can only keep
+    one of them, so which values the file "holds" for that sample is ambiguous, and that has to be said."""
+    seen, twice = set(), []
+    try:
+        kind = layout(path)
+        with _open_text(path) as fh:
+            reader = csv.reader(fh, delimiter="\t")
+            header = next(reader, None) or []
+            ids = header[1:] if kind != "row" else (line[0] for line in reader if line)
+            for i in ids:
+                if i in seen and i not in twice:
+                    twice.append(i)
+                seen.add(i)
+    except (Unreadable, OSError, EOFError, UnicodeDecodeError, csv.Error):
+        return []
+    return twice
+
+
 def row_fingerprints(table, columns):
     """{sample id: fingerprint or None} over the given columns."""
     out = {}

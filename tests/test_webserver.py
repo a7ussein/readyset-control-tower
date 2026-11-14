@@ -361,7 +361,7 @@ class Server(unittest.TestCase):
         d = tempfile.mkdtemp()
         a = TinyRelease()
         before, after = a.write(os.path.join(d, "before")), a.copy().swap(PROTEIN, P1, N1).write(os.path.join(d, "after"))
-        base = self.start(reviews=None, settings=os.path.join(d, "settings.json"))
+        base = self.start(reviews=os.path.join(d, "reviews.json"), settings=os.path.join(d, "settings.json"))   # nothing beside the tool
         def upload(folder, batch, **more):
             for name in FILES:
                 with open(os.path.join(folder, name), "rb") as fh:

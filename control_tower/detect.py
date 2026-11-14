@@ -137,6 +137,23 @@ def compare_file(file, path_a, path_b, rel_a, rel_b, describe=None):
         raise release.Unreadable(f"{file} is laid out differently in the two releases")
     findings = []
 
+    # The same sample id twice in the new release: a table keeps one of the two, so the file is ambiguous about that
+    # sample. Reported when it is new in this release; ids already repeated in the trusted release are not news.
+    already = set(release.repeated_ids(path_a))
+    repeated = [i for i in release.repeated_ids(path_b) if i not in already]
+    if repeated:
+        findings.append({
+            "kind": "other", "file": file, "confidence": "high",
+            "summary": f"{_plural(len(repeated), 'sample id')} {'appears' if len(repeated) == 1 else 'appear'} more than once in "
+                       f"{file} in {rel_b}. A table can hold one entry for a sample, so the last one was used and the "
+                       f"other was not compared.",
+            "evidence": [_sample(i, file, rel_b, "this id appears more than once") for i in repeated[:50]]
+                        + [{"kind": "file", "id": file, "release": rel_b, "note": f"content differs from {rel_a}"}],
+            "changes": [_profile(file, i) for i in repeated],
+            "limitation": "The tool can show the id is repeated. It cannot say which of the entries is the right one.",
+            "repair": {"action": "flag_for_review", "targets": [{"kind": "sample", "id": i, "release": rel_b, "file": file} for i in repeated[:50]],
+                       "justification": "Ask the data provider which entry is meant for each repeated id, and remove the other."}})
+
     if kind_a == "row":
         cols_a, table_a = release.read_rows(path_a)
         cols_b, table_b = release.read_rows(path_b)

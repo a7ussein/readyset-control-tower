@@ -177,6 +177,17 @@ class EmptyInputs(unittest.TestCase):
             self.assertIn(words, doc["findings"][0]["summary"])
             self.assertNotIn("codec", json.dumps(doc))                          # no programmer's error text reaches the page
 
+    def test_a_sample_id_that_appears_twice_is_reported_not_silently_merged(self):
+        def repeat_row(text):
+            lines = text.split("\n")
+            return "\n".join(lines[:2] + [lines[1]] + lines[2:])
+        doc = self.changed(CLINICAL, repeat_row)
+        self.assertEqual([f["kind"] for f in doc["findings"]], ["other"])
+        self.assertIn("appears more than once", doc["findings"][0]["summary"])
+        self.assertEqual(doc["verdict"], "Conditional")
+        repeated_column = self.changed(PROTEIN, lambda text: "\n".join(l + "\t" + l.split("\t")[1] if l else l for l in text.split("\n")))
+        self.assertIn("appears more than once", repeated_column["findings"][0]["summary"])
+
 
 if __name__ == "__main__":
     unittest.main()
