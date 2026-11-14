@@ -600,12 +600,37 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
   const [code, setCode] = useState('')
   const folderInput = useRef<HTMLInputElement>(null)
   const zipInput = useRef<HTMLInputElement>(null)
+  const filesInput = useRef<HTMLInputElement>(null)
+  const trustedFiles = useRef<HTMLInputElement>(null)
   const run = async (work: () => Promise<ReleaseState>) => {
     setProblem('')
     try { const next = await work(); setBusy(''); setOpen(!next.new); setPath(''); onLoaded(next) }
     catch (e) { setBusy(''); setProblem(e instanceof Error ? e.message : String(e)) }
   }
   const send = (files: File[], name: string) => { setBusy('Reading'); run(() => uploadRelease(files, name, state.files, setBusy)) }
+  // The "before": the trusted release can be chosen from this computer too, not only pasted as a path.
+  const [pickTrusted, setPickTrusted] = useState(false)
+  const trustedFolder = useRef<HTMLInputElement>(null)
+  const trustedZip = useRef<HTMLInputElement>(null)
+  const sendTrusted = (files: File[], name: string) => {
+    setBusy('Reading the trusted release'); setProblem('')
+    uploadRelease(files, name, state.files, setBusy, 'trusted')
+      .then(next => { setBusy(''); setPickTrusted(false); setOpen(true); onLoaded(next) })
+      .catch(e => { setBusy(''); setProblem(e instanceof Error ? e.message : String(e)) })
+  }
+  const trustedChooser = (
+    <div className="trusted-choose">
+      <p><strong>The trusted release (the "before").</strong> Choose its folder or a zip of it.</p>
+      <p className="drop-buttons">
+        <button type="button" className="ghost" disabled={!!busy} onClick={() => trustedFolder.current?.click()}>Choose the trusted folder</button>
+        <button type="button" className="ghost" disabled={!!busy} onClick={() => trustedFiles.current?.click()}>Choose its files</button>
+        <button type="button" className="ghost" disabled={!!busy} onClick={() => trustedZip.current?.click()}>Choose a zip</button>
+      </p>
+      <input ref={trustedFiles} type="file" hidden multiple onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) sendTrusted(f, 'trusted'); e.target.value = '' }} />
+      <input ref={trustedFolder} type="file" hidden multiple {...{ webkitdirectory: '' }} onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) sendTrusted(f, (f[0].webkitRelativePath || '').split('/')[0] || 'trusted'); e.target.value = '' }} />
+      <input ref={trustedZip} type="file" hidden accept=".zip" onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) sendTrusted(f, f[0].name); e.target.value = '' }} />
+    </div>
+  )
   const onDrop = async (e: DragEvent) => {
     e.preventDefault(); setOver(false)
     if (!state.trusted) { setProblem('Set the trusted release first, so there is something to compare with.'); return }
@@ -636,26 +661,32 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
         {state.new && <button type="button" className="link" onClick={() => setOpen(false)}>Close</button>}
       </div>
       {state.trusted
-        ? <p className="block-sub">It will be compared with the trusted release <code>{state.trusted_name}</code>.</p>
-        : (
+        ? <>
+            <p className="block-sub">It will be compared with the trusted release <code>{state.trusted_name}</code>. <button type="button" className="link" onClick={() => setPickTrusted(v => !v)}>Use a different trusted release</button></p>
+            {pickTrusted && trustedChooser}
+          </>
+        : (<>
+          {trustedChooser}
           <form className="path-row" onSubmit={e => { e.preventDefault(); if (trusted.trim()) run(() => setRelease({ trusted: trusted.trim() })) }}>
-            <label htmlFor="trusted-path">First, where is the trusted release? Paste its folder path.</label>
+            <label htmlFor="trusted-path">Or paste the trusted release's folder path</label>
             <input id="trusted-path" value={trusted} onChange={e => setTrusted(e.target.value)} placeholder="/path/to/oncosys-hackathon-challenge/data/tcga-brca/raw" spellCheck={false} />
             <button type="submit" className="primary" disabled={!trusted.trim()}>Use this</button>
           </form>
-        )}
+        </>)}
       <div className={`drop${over ? ' over' : ''}${busy ? ' busy' : ''}`} onDragOver={e => { e.preventDefault(); setOver(true) }} onDragLeave={() => setOver(false)} onDrop={onDrop}>
         {busy
           ? <p className="drop-main" role="status">{busy}…</p>
           : <>
-              <p className="drop-main">Drop the new release here</p>
-              <p className="quiet">A folder, a zip, or its files. Anywhere on this page works.</p>
+              <p className="drop-main">Drop the new release (the "after") here</p>
+              <p className="quiet">A folder, a zip, or all of its files at once (select several). Anywhere on this page works.</p>
               <p className="drop-buttons">
                 <button type="button" className="ghost" disabled={!state.trusted} onClick={() => folderInput.current?.click()}>Choose a folder</button>
+                <button type="button" className="ghost" disabled={!state.trusted} onClick={() => filesInput.current?.click()}>Choose its files</button>
                 <button type="button" className="ghost" disabled={!state.trusted} onClick={() => zipInput.current?.click()}>Choose a zip</button>
               </p>
             </>}
         <input ref={folderInput} type="file" hidden multiple {...{ webkitdirectory: '' }} onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) send(f, (f[0].webkitRelativePath || '').split('/')[0] || 'new-release'); e.target.value = '' }} />
+        <input ref={filesInput} type="file" hidden multiple onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) send(f, 'new-release'); e.target.value = '' }} />
         <input ref={zipInput} type="file" hidden accept=".zip" onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) send(f, f[0].name); e.target.value = '' }} />
       </div>
       <form className="path-row" onSubmit={e => { e.preventDefault(); if (path.trim()) { setBusy('Comparing'); run(() => setRelease({ path: path.trim() })) } }}>

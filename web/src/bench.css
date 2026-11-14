@@ -260,3 +260,6 @@ article.panel.pointed { outline: 3px solid var(--point); outline-offset: 6px; bo
 
 .deciding-as { font-size: 14.5px } .deciding-as .link { margin-left: 6px }
 .decide-all { font-size: 13.5px; color: var(--muted) } .decide-all summary { cursor: pointer; color: var(--brand); font-weight: 600 } .decide-all p { margin: 8px 0 }
+
+.trusted-choose { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--raised); display: flex; flex-direction: column; gap: 8px; font-size: 14.5px }
+.trusted-choose .drop-buttons { display: flex; gap: 10px; flex-wrap: wrap }

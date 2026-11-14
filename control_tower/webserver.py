@@ -380,7 +380,10 @@ class Handler(BaseHTTPRequestHandler):
                         os.replace(os.path.join(staged, f), os.path.join(target, f))
                 if os.path.isfile(os.path.join(staged, "upload.zip")):
                     unzip_release(os.path.join(staged, "upload.zip"), target)
-                new = release_folder(target, srv.staging)
+                if body.get("as") == "trusted":
+                    trusted = release_folder(target, srv.staging)
+                else:
+                    new = release_folder(target, srv.staging)
             if trusted and new and os.path.realpath(trusted) == os.path.realpath(new):
                 raise NotARelease("that is the trusted release itself. Give it the new release you want to check.")
             if trusted and srv.question_specs:
@@ -398,8 +401,8 @@ class Handler(BaseHTTPRequestHandler):
             srv.cache.clear()
             if not srv.reviews_path:
                 srv.reviews_path = "control-tower.reviews.json"
-            if trusted:
-                remember_trusted(trusted, srv.settings_path)
+            if trusted and not os.path.abspath(trusted).startswith(os.path.abspath(srv.staging) + os.sep):
+                remember_trusted(trusted, srv.settings_path)        # an uploaded copy is gone when the tool closes
         self._json(200, self._state())
 
     def _model_key(self):

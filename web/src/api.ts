@@ -52,7 +52,7 @@ export async function setRelease(change: { path?: string; trusted?: string }): P
 }
 
 /** Send dropped files (the release's own files, or one zip) and compare them. `progress` is told what is being sent. */
-export async function uploadRelease(files: File[], name: string, known: string[], progress: (text: string) => void): Promise<ReleaseState> {
+export async function uploadRelease(files: File[], name: string, known: string[], progress: (text: string) => void, as: 'new' | 'trusted' = 'new'): Promise<ReleaseState> {
   const wanted = files.filter(f => known.includes(f.name) || f.name.toLowerCase().endsWith('.zip'))
   if (wanted.length === 0) throw new Error(`None of the release's files were in what you dropped. Looking for ${known.slice(0, 2).join(', ')} and the others, or a zip of them.`)
   const batch = (crypto.randomUUID ? crypto.randomUUID() : `drop-${Date.now()}-${Math.random().toString(16).slice(2)}`).replace(/[^A-Za-z0-9-]/g, '')
@@ -61,8 +61,8 @@ export async function uploadRelease(files: File[], name: string, known: string[]
     const response = await fetch(`${base}/api/upload?batch=${batch}&name=${encodeURIComponent(file.name)}`, { method: 'POST', body: file })
     if (!response.ok) await answer(response)
   }
-  progress('Comparing')
-  return answer(await fetch(`${base}/api/release`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ batch, name }) }))
+  progress(as === 'trusted' ? 'Reading the trusted release' : 'Comparing')
+  return answer(await fetch(`${base}/api/release`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ batch, name, as }) }))
 }
 
 /** Where the plain-English audit report for the current question can be downloaded. Null when there is no server. */

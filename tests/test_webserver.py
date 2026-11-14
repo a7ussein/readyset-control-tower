@@ -356,6 +356,26 @@ class Server(unittest.TestCase):
         self.get(base + "/api/findings")
         self.assertEqual(len(json.loads(self.get(base + "/api/history")[1])["comparisons"]), 2)       # looked at again, not added again
 
+    def test_both_releases_can_be_uploaded_the_before_and_the_after(self):
+        from tests.tiny_release import FILES, N1, P1, PROTEIN, TinyRelease
+        d = tempfile.mkdtemp()
+        a = TinyRelease()
+        before, after = a.write(os.path.join(d, "before")), a.copy().swap(PROTEIN, P1, N1).write(os.path.join(d, "after"))
+        base = self.start(reviews=None, settings=os.path.join(d, "settings.json"))
+        def upload(folder, batch, **more):
+            for name in FILES:
+                with open(os.path.join(folder, name), "rb") as fh:
+                    req = urllib.request.Request(f"{base}/api/upload?batch={batch}&name={name}", data=fh.read(), method="POST")
+                urllib.request.urlopen(req, timeout=10).close()
+            return self.post(base + "/api/release", dict(batch=batch, **more))
+        status, state = upload(before, "batch-before-0001", name="before", **{"as": "trusted"})
+        self.assertEqual((status, state["trusted_name"], state["new"]), (200, "before", None))
+        status, state = upload(after, "batch-after-00002", name="after")
+        self.assertEqual((status, state["trusted_name"], state["new_name"]), (200, "before", "after"))
+        doc = json.loads(self.get(base + "/api/findings")[1])
+        self.assertEqual([f["kind"] for f in doc["findings"]], ["sample_swap"])
+        self.assertFalse(os.path.exists(os.path.join(d, "settings.json")) and "before" in open(os.path.join(d, "settings.json")).read())
+
     def test_the_audit_report_says_the_same_things_in_plain_english(self):
         base, _ = self.live()
         doc = json.loads(self.get(base + "/api/findings")[1])
