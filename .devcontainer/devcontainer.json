@@ -1,9 +1,19 @@
 {
   "name": "ReadySet Control Tower",
   "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
-  "forwardPorts": [8010],
+  "forwardPorts": [
+    8010
+  ],
   "portsAttributes": {
-    "8010": { "label": "ReadySet Control Tower", "onAutoForward": "openPreview" }
+    "8010": {
+      "label": "ReadySet Control Tower",
+      "onAutoForward": "openPreview"
+    }
   },
-  "postStartCommand": "nohup python3 -m control_tower serve --no-open > /tmp/control-tower.log 2>&1 &"
+  "postStartCommand": "nohup python3 -m control_tower serve --no-open > /tmp/control-tower.log 2>&1 &",
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
+  }
 }
