@@ -4,9 +4,11 @@ Team **Automyte** · OncoSys Cancer AI Lab, Nov 11–14 2026 · Track: Cohort Fi
 
 ## Start here: see it running in one minute
 
-[![Download the tool as a ZIP file](https://img.shields.io/badge/Download_the_tool-ZIP_file-3B2F8F?style=for-the-badge)](https://github.com/a7ussein/readyset-control-tower/archive/refs/heads/main.zip)
+[![Watch the demo video](https://img.shields.io/badge/Watch_the_demo-2_and_a_half_minutes-E0457B?style=for-the-badge)](https://a7ussein.github.io/readyset-control-tower/) [![Download the tool as a ZIP file](https://img.shields.io/badge/Download_the_tool-ZIP_file-3B2F8F?style=for-the-badge)](https://github.com/a7ussein/readyset-control-tower/archive/refs/heads/main.zip)
 
-1. Click the button above, then unzip the file. You get a folder called `readyset-control-tower-main`.
+**To just see it,** click Watch the demo. **To run it yourself:**
+
+1. Click Download the tool, then unzip the file. You get a folder called `readyset-control-tower-main`.
 2. Start it:
    - **Windows:** open the folder and double-click `run.bat`.
    - **Mac or Linux:** open Terminal, type `cd ` (with a space after it), drag the folder onto the Terminal window, press Enter, then type `./run.sh` and press Enter.
@@ -170,7 +172,7 @@ The files the tool writes for the organisers' practice release, so you can see t
 - [`examples/practice-B.findings.json`](examples/practice-B.findings.json): the findings in the shared format (v0.2). It passes `format/validate.py`.
 - [`examples/practice-B.audit-report.html`](examples/practice-B.audit-report.html): the same findings in plain English. Download it and open it in a browser.
 
-Demo video: to be linked here before the code freeze.
+Demo video (two and a half minutes): https://a7ussein.github.io/readyset-control-tower/
 
 ## Team
 
