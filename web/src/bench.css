@@ -294,3 +294,5 @@ article.panel.pointed { outline: 3px solid var(--point); outline-offset: 6px; bo
 .side .drop-buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 4px } .side .drop-buttons .ghost { padding: 8px 12px; font-size: 14px }
 .compare-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap } .big-compare { padding: 13px 34px; font-size: 16px } .big-compare:disabled { opacity: .5 }
 @media (max-width: 720px) { .sides { grid-template-columns: minmax(0, 1fr) } }
+
+.report-button { display: flex; flex-direction: column; gap: 8px } .report-who .wide { grid-column: 1 / -1; font-size: 14.5px } .report-as { margin-left: 8px }

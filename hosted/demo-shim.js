@@ -113,6 +113,16 @@
       return json(200, { ...got.body, ...(await flags()) })
     }
     if (path === '/api/envelope') return json(400, { detail: NO_ENVELOPE })
+    if (path === '/api/report' && method === 'POST') {
+      let body
+      try { body = JSON.parse(typeof init.body === 'string' ? init.body : await new Response(init.body).text()) } catch { body = {} }
+      const doc = await findings(body.for)
+      if (!doc) return json(400, { detail: NEEDS_TOOL })
+      const py = await toolCode()
+      py.globals.set('doc_text', JSON.stringify(doc))
+      py.globals.set('by_text', JSON.stringify({ name: String(body.name || ''), role: String(body.role || '') }))
+      return new Response(py.runPython('report.render(json.loads(doc_text), json.loads(by_text))'), { status: 200, headers: { 'Content-Type': 'text/html' } })
+    }
     if (path === '/api/cells') {
       const fid = url.searchParams.get('finding') || ''
       if (live && python_ready && JSON.parse(python_ready.runPython('readyset_browser.current()')).new) {

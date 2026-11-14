@@ -152,6 +152,27 @@ class Handler(BaseHTTPRequestHandler):
         view = cells(srv.releases[0], srv.releases[1], doc, finding)
         self._json(400 if "detail" in view else 200, view)
 
+    def _report_for(self):
+        """The audit report for a named person: {"for": "A1,A2", "name": ..., "role": ...}. The report says who ran it."""
+        from .report import render
+        try:
+            body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 4000)) or b"{}")
+            if not isinstance(body, dict):
+                raise ValueError
+        except ValueError:
+            return self._json(400, {"detail": "expected who is producing the report"})
+        status, doc = self._reviewed(str(body.get("for") or ""))
+        if status != 200:
+            return self._json(status, doc)
+        page = render(doc, {"name": body.get("name"), "role": body.get("role")}).encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Disposition", 'attachment; filename="audit-report.html"')
+        self.send_header("Content-Length", str(len(page)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(page)
+
     def _history_path(self):
         srv = self.server
         if not srv.reviews_path or not (srv.releases and all(srv.releases)):
@@ -485,6 +506,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._model_key()
             if parts.path == "/api/speak":
                 return self._speak()
+            if parts.path == "/api/report":
+                return self._report_for()
             if parts.path == "/api/question":
                 return self._add_question()
             if parts.path == "/api/upload":

@@ -135,3 +135,10 @@ export interface DataView {
 }
 /** The cells behind one change, read from the two release files themselves. */
 export const dataBehind = async (finding: string) => json<DataView>(await fetch(`${base}/api/cells?finding=${encodeURIComponent(finding)}`))
+
+/** The audit report as a page of text, produced for a named person: the report says who ran it. */
+export async function auditReport(analyses: string[], name: string, role: string): Promise<string> {
+  const response = await fetch(`${base}/api/report`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ for: analyses.join(','), name, role }) })
+  if (!response.ok) { const body = await response.json().catch(() => ({})); throw new Error(typeof body.detail === 'string' ? body.detail : 'The report could not be written.') }
+  return response.text()
+}

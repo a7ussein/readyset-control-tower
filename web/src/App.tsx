@@ -2,7 +2,7 @@
 // Everything it shows comes from findings.json (docs/OUTPUT-CONTRACT.md). It counts and formats; it computes no results.
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import './bench.css'
-import { addAnalysis, analysisOptions, changelogUrl, columnValues, loadFindings, openEnvelope, pastComparisons, releaseState, reportUrl, rowNames, saveReview, setRelease, uploadRelease, usingExample, type AnalysisOptions, type PastComparison, type ReleaseState } from './api'
+import { addAnalysis, analysisOptions, auditReport, changelogUrl, columnValues, loadFindings, openEnvelope, pastComparisons, releaseState, reportUrl, rowNames, saveReview, setRelease, uploadRelease, usingExample, type AnalysisOptions, type PastComparison, type ReleaseState } from './api'
 import type { Analysis, FileInfo, Finding, Findings, Pointer, Repair, Review, Witness } from './findings'
 import { useTheme } from './theme'
 import { SectionBoundary } from './SectionBoundary'
@@ -438,7 +438,7 @@ function FilesAndDownload({ raw, doc }: { raw: Findings; doc: Doc }) {
           <h3>The report, in two forms</h3>
           <p><strong>For people:</strong> the audit report says in plain English what changed, the proof, what it did to each result, the suggested fix and who reviewed it. Open it, print it or save it as a PDF.</p>
           {reportUrl(doc.asked)
-            ? <p><a className="primary as-button" href={reportUrl(doc.asked) ?? undefined} download="audit-report.html">Download the audit report</a></p>
+            ? <ReportButton asked={doc.asked} />
             : <p className="quiet">The audit report is available when the page is comparing real releases.</p>}
           {changelogUrl(doc.asked) && <>
             <p><strong>For a spreadsheet:</strong> the change log has one row per affected sample: the change, the value before and after, the analysis it touches, the suggested fix and the decision.</p>
@@ -553,6 +553,44 @@ async function droppedFiles(data: DataTransfer): Promise<{ files: File[]; name: 
   }
   for (const e of entries) await walk(e, 0)
   return { files, name: entries[0].name }
+}
+
+/** The audit report is produced for a named person. It asks who is running it once, and remembers. */
+function ReportButton({ asked }: { asked: string[] }) {
+  const [name, setName] = useState(() => remembered('readyset-reviewer'))
+  const [role, setRole] = useState(() => remembered('readyset-role'))
+  const [asking, setAsking] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState('')
+  const produce = async () => {
+    if (!name.trim()) { setAsking(true); return }
+    try { localStorage.setItem('readyset-reviewer', name); localStorage.setItem('readyset-role', role) } catch { /* storage may be off */ }
+    setBusy(true); setProblem('')
+    try {
+      const url = URL.createObjectURL(new Blob([await auditReport(asked, name.trim(), role.trim())], { type: 'text/html' }))
+      const a = Object.assign(document.createElement('a'), { href: url, download: 'audit-report.html' })
+      document.body.appendChild(a); a.click(); a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 10000)
+      setAsking(false)
+    } catch (e) { setProblem(e instanceof Error ? e.message : String(e)) }
+    setBusy(false)
+  }
+  return (
+    <div className="report-button">
+      {asking && (
+        <form className="who report-who" onSubmit={e => { e.preventDefault(); void produce() }}>
+          <p className="wide">An audit report says who ran it. Who is producing this one?</p>
+          <label>Your name<input id="report-name" value={name} onChange={e => setName(e.target.value)} placeholder="Name" autoComplete="name" autoFocus /></label>
+          <label>Your role<input id="report-role" value={role} onChange={e => setRole(e.target.value)} placeholder="Research engineer" /></label>
+        </form>
+      )}
+      <p>
+        <button type="button" className="primary" disabled={busy || (asking && !name.trim())} onClick={() => void produce()}>{busy ? 'Writing the report…' : 'Download the audit report'}</button>
+        {!asking && name.trim() && <span className="quiet report-as"> as {name.trim()}{role.trim() ? `, ${role.trim()}` : ''}. <button type="button" className="link" onClick={() => setAsking(true)}>Change</button></span>}
+      </p>
+      {problem && <p className="error inline" role="alert">{problem}</p>}
+    </div>
+  )
 }
 
 // Every comparison made on this computer, so a person can go back to an earlier release and see what had changed.

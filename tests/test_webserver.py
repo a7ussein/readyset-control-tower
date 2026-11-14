@@ -388,6 +388,15 @@ class Server(unittest.TestCase):
         self.assertTrue(first["changed"] and second["changed"])
         self.assertEqual(self.get(base + "/api/cells?finding=F9")[0], 400)
 
+    def test_the_audit_report_says_who_produced_it(self):
+        base, _ = self.live()
+        req = urllib.request.Request(base + "/api/report", data=json.dumps({"name": "R. Engineer", "role": "research engineer"}).encode(), method="POST")
+        with urllib.request.urlopen(req, timeout=10) as r:
+            page = r.read().decode()
+            self.assertIn("audit-report.html", r.headers["Content-Disposition"])
+        self.assertIn("This copy was produced by <strong>R. Engineer</strong>, research engineer.", page)
+        self.assertIn("This copy was produced without a name.", self.get(base + "/api/report")[1].decode())
+
     def test_the_audit_report_says_the_same_things_in_plain_english(self):
         base, _ = self.live()
         doc = json.loads(self.get(base + "/api/findings")[1])

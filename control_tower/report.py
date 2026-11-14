@@ -84,7 +84,15 @@ def result_table(analysis, releases):
     return table(["", releases[0], releases[1], "change"], rows, lambda i, j: j == 2 and moved[i])
 
 
-def render(doc):
+def _made_by(by):
+    """Who produced this copy of the report: {"name": ..., "role": ...}. An audit report says who ran it."""
+    if not isinstance(by, dict) or not str(by.get("name") or "").strip():
+        return " This copy was produced without a name."
+    name, role = str(by["name"]).strip()[:200], str(by.get("role") or "").strip()[:200]
+    return f" This copy was produced by <strong>{e(name)}</strong>{', ' + e(role) if role else ''}."
+
+
+def render(doc, by=None):
     x = doc.get("x_readyset") or {}
     releases = [r.get("name", "") for r in (doc.get("data") or {}).get("releases", [])] + ["the trusted release", "the new release"]
     a_name, b_name = (releases[0] or "the trusted release"), (releases[1] or "the new release")
@@ -102,7 +110,7 @@ def render(doc):
     out = []
     out.append(f"<h1>Release audit report</h1><p class=sub>{e(a_name)} (trusted) compared with {e(b_name)} (new). "
                f"{e((doc.get('producer') or {}).get('product', ''))}, team {e((doc.get('producer') or {}).get('team', ''))}. "
-               f"Generated {e(x.get('generated_at', ''))}.</p>")
+               f"Generated {e(x.get('generated_at', ''))}.{_made_by(by)}</p>")
 
     # ---- the answer
     changed_files = [f["file"] for f in files if f.get("status") not in ("unchanged", "absent", "not_in_both")]
