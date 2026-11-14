@@ -11,6 +11,7 @@ beside the findings file, or `control-tower.reviews.json` in the current folder 
 Meant for a laptop, not for the open internet.
 """
 import atexit
+import hashlib
 import json
 import mimetypes
 import os
@@ -101,7 +102,7 @@ class Handler(BaseHTTPRequestHandler):
         status, doc = self._document(wanted)
         if status == 200 and isinstance(doc, dict) and isinstance(doc.get("findings"), list):
             new_release = release_name(doc)
-            keys = {f["id"]: review_key(f, new_release) for f in doc["findings"] if isinstance(f, dict) and "id" in f}
+            keys = {f["id"]: review_key(f, new_release, doc) for f in doc["findings"] if isinstance(f, dict) and "id" in f}
             saved = self.server.load_reviews()
             x = doc.setdefault("x_readyset", {}) if isinstance(doc.get("x_readyset", {}), dict) else None
             if x is not None:
@@ -477,14 +478,27 @@ def question_problems(specs, trusted):
     return [w for w in (a.problem(trusted) for a in (from_spec(q) for q in specs) if a not in REGISTRY) if w]
 
 
-def review_key(finding, new_release=""):
-    """What a review is attached to: the release, the kind, the file and the samples. It survives a change of question,
-    and it does not carry over to a different release."""
+def review_key(finding, new_release="", doc=None):
+    """What a review is attached to: the release, the kind, the file, the samples, and a fingerprint of the proof itself
+    (the finding's evidence and the content hashes of the files it points at, in every release). It survives a change of
+    question. It does not carry over to a different release, nor to the same release name once the proof has changed:
+    a review is of what the reviewer saw, so different evidence needs a fresh one."""
     evidence = [e for e in finding.get("evidence", []) if isinstance(e, dict)]
     file = next((e.get("file") for e in evidence if e.get("file")), "") or \
         next((e.get("id") for e in evidence if e.get("kind") == "file"), "")
     ids = sorted(str(e.get("id")) for e in evidence if e.get("kind") != "file")
-    return "|".join([new_release, str(finding.get("kind")), str(file), ",".join(ids)])
+    files = {str(e.get("file")) for e in evidence if e.get("file")} | \
+        {str(e.get("id")) for e in evidence if e.get("kind") == "file"}
+    hashes = []
+    try:
+        for rel in doc["data"]["releases"]:
+            hashes += [[str(rel.get("name")), str(fl.get("file")), str(fl.get("sha256"))]
+                       for fl in rel.get("files", []) if isinstance(fl, dict) and str(fl.get("file")) in files]
+    except (KeyError, TypeError, AttributeError):
+        pass
+    proof = json.dumps([sorted(json.dumps(e, sort_keys=True) for e in evidence), sorted(hashes)], sort_keys=True)
+    mark = hashlib.sha256(proof.encode("utf-8")).hexdigest()[:16]
+    return "|".join([new_release, str(finding.get("kind")), str(file), ",".join(ids), mark])
 
 
 class Server(ThreadingHTTPServer):

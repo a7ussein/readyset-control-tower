@@ -218,6 +218,29 @@ class Server(unittest.TestCase):
         e.exception.close()
         self.assertEqual(e.exception.code, 400)
 
+    def test_a_review_does_not_carry_over_when_the_evidence_changes_under_the_same_release_name(self):
+        from tests.tiny_release import N1, N2, P1, PROTEIN, TinyRelease
+        d = tempfile.mkdtemp()
+        a = TinyRelease()
+        folder_a, folder_b = a.write(os.path.join(d, "A")), a.copy().swap(PROTEIN, P1, N1).write(os.path.join(d, "B"))
+        reviews = os.path.join(d, "reviews.json")
+        base = self.start(releases=(folder_a, folder_b), reviews=reviews)
+        doc = json.loads(self.get(base + "/api/findings")[1])
+        swap = next(f for f in doc["findings"] if f["kind"] == "sample_swap")
+        key = doc["x_readyset"]["review_keys"][swap["id"]]
+        self.post(base + "/api/reviews", {"key": key, "status": "confirmed", "reviewer": "R. Engineer", "role": "research engineer"})
+        again = json.loads(self.get(base + "/api/findings")[1])
+        self.assertEqual(again["x_readyset"]["review_keys"][swap["id"]], key)      # same evidence: the review stays
+        self.assertEqual(next(f for f in again["findings"] if f["id"] == swap["id"])["needs_human_review"], False)
+        # The same release name, finding kind, file and sample ids, but the file's contents are no longer what was reviewed.
+        a.copy().swap(PROTEIN, P1, N1).set_cell(PROTEIN, "HER2", N2, "9.9").write(folder_b)
+        changed = json.loads(self.get(self.start(releases=(folder_a, folder_b), reviews=reviews) + "/api/findings")[1])
+        now = next(f for f in changed["findings"] if f["kind"] == "sample_swap")
+        self.assertEqual(sorted(e["id"] for e in now["evidence"]), sorted(e["id"] for e in swap["evidence"]))
+        self.assertNotEqual(changed["x_readyset"]["review_keys"][now["id"]], key)
+        self.assertEqual(now["needs_human_review"], True)                          # it waits for a fresh review
+        self.assertEqual(changed["x_readyset"]["reviews"], [])
+
     def test_the_audit_report_says_the_same_things_in_plain_english(self):
         base, _ = self.live()
         doc = json.loads(self.get(base + "/api/findings")[1])
