@@ -252,7 +252,8 @@ def layout(path):
         if len(header) < 2:
             raise Unreadable(f"{os.path.basename(path)} holds no table: one line of text with no columns")
         return None                 # a header and no data lines: the header alone does not say which way round it is
-    raise Unreadable(f"{os.path.basename(path)}: no TCGA sample ids in the header or the first column")
+    raise Unreadable(f"{os.path.basename(path)} does not look like this release's table: no TCGA sample ids were found in "
+                     f"its header or its first column. Check that it is the right file")
 
 
 # ------------------------------------------------------------------ files with one sample per row --
