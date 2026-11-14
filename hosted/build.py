@@ -6,6 +6,7 @@ The recorded answers in hosted/recorded were written by this tool comparing the 
 findings, not data files. The page runs the tool's report, change log and assistant code in the browser (Pyodide).
 """
 import glob
+import json
 import os
 import shutil
 import subprocess
@@ -36,10 +37,12 @@ shutil.copytree(os.path.join(here, "recorded"), os.path.join(out, "data"))
 shutil.copytree(os.path.join(here, "api"), os.path.join(out, "api"))
 package = os.path.join(out, "py", "control_tower")
 os.makedirs(package)
-for name in ("report.py", "ask.py", "changelog.py", "understand_ai.py", "voice.py"):
+names = sorted(os.path.basename(p) for p in glob.glob(os.path.join(root, "control_tower", "*.py")) if not p.endswith("__main__.py"))
+for name in names:                                     # the tool's own code, unchanged: the browser runs the same engine
     shutil.copy(os.path.join(root, "control_tower", name), package)
-with open(os.path.join(package, "__init__.py"), "w", encoding="utf-8") as fh:
-    fh.write('"""ReadySet Control Tower: the report, change log and assistant code, as run by the online demo."""\n')
+with open(os.path.join(out, "py", "manifest.json"), "w", encoding="utf-8") as fh:
+    json.dump(names, fh)
+shutil.copy(os.path.join(here, "browser.py"), os.path.join(out, "py", "readyset_browser.py"))
 shutil.copytree(os.path.join(out, "py"), os.path.join(out, "api", "_lib"))      # the function's own copy of the package
 if os.path.isdir(kept):
     shutil.copytree(kept, os.path.join(out, ".vercel"))

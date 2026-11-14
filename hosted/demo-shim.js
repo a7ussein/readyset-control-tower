@@ -1,11 +1,19 @@
-// The online demo. The page normally asks a small server on your own computer; here those questions are answered
-// from answers the tool gave when it compared the organisers' practice release. Nothing is uploaded anywhere.
+// The online demo. The page normally asks a small server on your own computer. Here those questions are answered in
+// the browser: at first from answers the tool gave for the organisers' practice release, and, once a visitor chooses
+// a before and an after release of their own, by the tool's own comparison engine running in this page (Pyodide).
+// The files a visitor chooses are read into the browser's memory. They are not uploaded anywhere.
 (() => {
   const realFetch = window.fetch.bind(window)
   const here = new URL('.', document.baseURI)
   const KEY = 'readyset-demo-reviews'
-  const NEEDS_TOOL = 'This online demo shows one comparison the tool has already run. To compare your own release or add ' +
-    'your own analysis, download the tool: it runs on your computer and nothing is uploaded.'
+  const NEEDS_TOOL = 'Adding an analysis of your own works in the tool on your computer. Here you can compare your own ' +
+    'before and after releases against the two built-in analyses.'
+  const NO_PATH = 'A path only works in the tool on your computer. Here, choose the folder, all of its files, or a zip.'
+  const NO_ENVELOPE = 'A sealed envelope is opened by the tool on your computer, with the organisers\' script. Here, choose the opened release\'s folder instead.'
+  const RELEASE_FILES = ['clinical.tsv', 'survival.tsv', 'mutation_gene_level.tsv.gz', 'protein_rppa.tsv.gz', 'copy_number_gistic.tsv.gz', 'rna_hiseq.tsv.gz']
+  let live = false                          // true once the visitor has chosen a release of their own
+  const pause = () => new Promise(done => setTimeout(done, 60))        // let the page say "Comparing" before the work starts
+  const flags = async () => ({ ...(await serverModel() ? { ai_understanding: "an AI model on the team's server" } : {}), voice: await serverVoice() })
   let reviews = {}
   try { reviews = JSON.parse(sessionStorage.getItem(KEY) || '{}') || {} } catch { reviews = {} }
   const keep = () => { try { sessionStorage.setItem(KEY, JSON.stringify(reviews)) } catch { /* kept for this page only */ } }
@@ -57,6 +65,15 @@
   }
 
   const findings = async wanted => {
+    const both = () => { const now = JSON.parse(python_ready.runPython('readyset_browser.current()')); return now.trusted && now.new }
+    if (live && both()) {
+      const py = await toolCode()
+      await pause()
+      py.globals.set('wanted_text', String(wanted || ''))
+      const got = JSON.parse(py.runPython('readyset_browser.findings(wanted_text)'))
+      if (got.status !== 200) { const e = new Error(got.body.detail); e.status = got.status; throw e }
+      return withReviews(got.body)
+    }
     const name = recorded(wanted)
     if (!name) return null
     return withReviews(JSON.parse(await load(`data/findings-${name}.json`)))
@@ -67,12 +84,42 @@
     const path = url.pathname.slice(url.pathname.indexOf('/api/'))
     const method = ((init && init.method) || 'GET').toUpperCase()
     if (path === '/api/health') return json(200, { status: 'ok', service: 'readyset-control-tower', demo: true })
-    if (path === '/api/state') return json(200, { ...JSON.parse(await load('data/state.json')), ...(await serverModel() ? { ai_understanding: "an AI model on the team's server" } : {}), voice: await serverVoice() })
+    if (path === '/api/state') {
+      if (live) return json(200, { ...JSON.parse((await toolCode()).runPython('readyset_browser.current()')), ...(await flags()) })
+      return json(200, { ...JSON.parse(await load('data/state.json')), ...(await flags()) })
+    }
+    if (path === '/api/upload' && method === 'POST') {
+      const name = (url.searchParams.get('name') || '').split('/').pop()
+      const batch = url.searchParams.get('batch') || ''
+      if (!/^[A-Za-z0-9-]{8,64}$/.test(batch) || !(RELEASE_FILES.includes(name) || name.toLowerCase().endsWith('.zip'))) {
+        return json(400, { detail: `${name || 'that file'} is not one of the release's files or a zip` })
+      }
+      const py = await toolCode()
+      const bytes = new Uint8Array(await new Response(init.body).arrayBuffer())
+      py.FS.mkdirTree(`/staging/${batch}`)
+      py.FS.writeFile(`/staging/${batch}/${RELEASE_FILES.includes(name) ? name : 'upload.zip'}`, bytes)
+      return json(200, { saved: name })
+    }
+    if (path === '/api/release' && method === 'POST') {
+      let body
+      try { body = JSON.parse(typeof init.body === 'string' ? init.body : await new Response(init.body).text()) } catch { body = null }
+      if (!body || !body.batch) return json(400, { detail: NO_PATH })
+      const py = await toolCode()
+      await pause()
+      py.globals.set('use_text', JSON.stringify({ batch: String(body.batch), name: String(body.name || ''), trusted: body.as === 'trusted' }))
+      const got = JSON.parse(py.runPython('_u = json.loads(use_text)\nreadyset_browser.use(_u["batch"], _u["name"], _u["trusted"])'))
+      if (got.status !== 200) return json(got.status, got.body)
+      live = true
+      return json(200, { ...got.body, ...(await flags()) })
+    }
+    if (path === '/api/envelope') return json(400, { detail: NO_ENVELOPE })
     if (path === '/api/speak' && method === 'POST') return realFetch(new URL('api/speak', here), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: init.body })
     if (path === '/api/history') return json(200, { comparisons: [] })
     if (path === '/api/findings') {
-      const doc = await findings(url.searchParams.get('for'))
-      return doc ? json(200, doc) : json(400, { detail: NEEDS_TOOL })
+      try {
+        const doc = await findings(url.searchParams.get('for'))
+        return doc ? json(200, doc) : json(400, { detail: NEEDS_TOOL })
+      } catch (e) { return json(e.status || 500, { detail: e.message || 'The comparison failed.' }) }
     }
     if (path === '/api/reviews' && method === 'POST') {
       let body
@@ -129,11 +176,11 @@ json.dumps(_r)`)
     let url
     try { url = new URL(typeof input === 'string' ? input : input.url, location.href) } catch { return realFetch(input, init) }
     if (url.origin !== location.origin || !url.pathname.includes('/api/')) return realFetch(input, init)
-    return api(url, init).catch(() => json(500, { detail: 'The demo could not load its recorded answer. Reload the page.' }))
+    return api(url, init).catch(() => json(500, { detail: 'The page could not do that just now. Reload it and try again.' }))
   }
 
   // ---- the tool's own Python (the report writer and the assistant), run here in the browser ------------------------
-  let python
+  let python, python_ready                  // python_ready is set once the engine has loaded; `live` implies it has
   const toolCode = () => (python ??= (async () => {
     await new Promise((ok, fail) => {
       const s = document.createElement('script')
@@ -141,10 +188,14 @@ json.dumps(_r)`)
       s.onload = ok; s.onerror = () => fail(new Error('could not load'))
       document.head.appendChild(s)
     })
-    const py = await window.loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' })
+    const py = python_ready = await window.loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' })
     py.FS.mkdirTree('/home/pyodide/control_tower')
-    for (const name of ['__init__.py', 'report.py', 'ask.py', 'changelog.py']) py.FS.writeFile('/home/pyodide/control_tower/' + name, await load('py/control_tower/' + name))
-    py.runPython('import json\nfrom control_tower import report, ask, changelog')
+    const names = JSON.parse(await load('py/manifest.json'))
+    const sources = await Promise.all(names.map(name => load('py/control_tower/' + name)))
+    names.forEach((name, i) => py.FS.writeFile('/home/pyodide/control_tower/' + name, sources[i]))
+    py.FS.writeFile('/home/pyodide/readyset_browser.py', await load('py/readyset_browser.py'))
+    py.FS.mkdirTree('/staging')
+    py.runPython('import json\nfrom control_tower import report, ask, changelog\nimport readyset_browser')
     return py
   })().catch(e => { python = undefined; throw e }))
 
@@ -195,8 +246,8 @@ json.dumps(_r)`)
     const bar = document.createElement('div')
     bar.setAttribute('role', 'note')
     bar.style.cssText = 'background:#3B2F8F;color:#fff;font:500 14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;padding:10px 16px;text-align:center'
-    bar.innerHTML = 'Online demo. This is the organisers’ practice release, as the tool compared it. Change the question, open a finding, ' +
-      'sign it off, ask it a question, download the report and the change log. Your sign-offs stay in this browser. With your own data the tool runs on your computer and uploads nothing. ' +
+    bar.innerHTML = 'Online demo, showing the organisers’ practice release. To compare your own, press “Compare a different release” and choose a before and an after: ' +
+      'the comparison runs in your browser and your files are not uploaded. Sign-offs stay in this browser. ' +
       '<a style="color:#fff;font-weight:700" href="https://github.com/a7ussein/readyset-control-tower#start-here-see-it-running-in-one-minute">Get the tool</a>'
     document.body.insertBefore(bar, document.body.firstChild)
   }
