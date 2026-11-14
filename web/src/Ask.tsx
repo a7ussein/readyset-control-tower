@@ -2,7 +2,7 @@
 // findings by fixed patterns. No language model. Every answer shows how it was reached and a fingerprint that is
 // the same every time the same question is asked of the same findings.
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { askQuestion, saveReview, type AskReply } from './api'
+import { askQuestion, saveReview, setModelKey, type AskReply } from './api'
 
 const STARTERS = ['Can I use the new release?', 'Why does it matter for my results?', 'What should I do next?',
   'What can the tool not tell me?', 'Will you give the same answer next time?']
@@ -12,7 +12,7 @@ const remember = (key: string, value: string) => { try { localStorage.setItem(ke
 interface Turn { id: number; q: string; reply?: AskReply; problem?: string; recorded?: 'yes' | 'failed'; checking?: boolean }
 type Listener = { start: () => void; stop: () => void; onresult: ((e: { results: { [i: number]: { [j: number]: { transcript: string } } } }) => void) | null; onend: (() => void) | null; onerror: (() => void) | null; lang: string; interimResults: boolean }
 
-export function Ask({ asked, onChanged, canUseModel }: { asked?: string[]; onChanged: () => void; canUseModel?: boolean }) {
+export function Ask({ asked, onChanged, canUseModel, offerKey }: { asked?: string[]; onChanged: () => void; canUseModel?: string; offerKey?: boolean }) {
   const [open, setOpen] = useState(false)
   const [turns, setTurns] = useState<Turn[]>([])
   const [text, setText] = useState('')
@@ -20,6 +20,15 @@ export function Ask({ asked, onChanged, canUseModel }: { asked?: string[]; onCha
   const [role, setRole] = useState(() => remembered('readyset-role'))
   const [aloud, setAloud] = useState(false)
   const [model, setModel] = useState(false)
+  const [how, setHow] = useState(canUseModel ?? '')
+  const [key, setKey] = useState('')
+  const [keyProblem, setKeyProblem] = useState('')
+  useEffect(() => { setHow(canUseModel ?? '') }, [canUseModel])
+  const useKey = async (e: FormEvent) => {
+    e.preventDefault(); setKeyProblem('')
+    try { const r = await setModelKey(key.trim()); setHow(r.ai_understanding); setKey(''); if (r.ai_understanding) setModel(true) }
+    catch (err) { setKeyProblem(err instanceof Error ? err.message : 'The key was not accepted.') }
+  }
   const [listening, setListening] = useState(false)
   const next = useRef(1)
   const end = useRef<HTMLDivElement>(null)
@@ -30,7 +39,7 @@ export function Ask({ asked, onChanged, canUseModel }: { asked?: string[]; onCha
   useEffect(() => { end.current?.scrollIntoView({ block: 'end' }) }, [turns, open])
   useEffect(() => { if (!open && canSpeak) window.speechSynthesis.cancel() }, [open, canSpeak])
   const patch = (id: number, change: Partial<Turn>) => setTurns(all => all.map(t => (t.id === id ? { ...t, ...change } : t)))
-  const body = (q: string) => ({ q, for: asked?.join(','), name: name.trim(), role: role.trim(), ai: model && !!canUseModel })
+  const body = (q: string) => ({ q, for: asked?.join(','), name: name.trim(), role: role.trim(), ai: model && !!how })
 
   const ask = async (question: string) => {
     const q = question.trim()
@@ -162,7 +171,18 @@ export function Ask({ asked, onChanged, canUseModel }: { asked?: string[]; onCha
         <button type="submit" className="primary" disabled={!text.trim()}>Ask</button>
       </form>
       {canSpeak && <label className="ask-aloud"><input id="ask-aloud" type="checkbox" checked={aloud} onChange={e => setAloud(e.target.checked)} /> Read answers aloud</label>}
-      {canUseModel && <label className="ask-aloud" title="When my word list does not recognise your wording, a language model is asked which of my fixed questions you mean. It is sent only your question, never the data, and it writes none of the answer."><input id="ask-model" type="checkbox" checked={model} onChange={e => setModel(e.target.checked)} /> Understand any wording with an AI model (sends only your question, never the data)</label>}
+      {how && <label className="ask-aloud" title="When my word list does not recognise your wording, a language model is asked which of my fixed questions you mean. It is sent only your question, never the data, and it writes none of the answer."><input id="ask-model" type="checkbox" checked={model} onChange={e => setModel(e.target.checked)} /> Understand any wording with {how} (it gets only your question, never the data)</label>}
+      {offerKey && !how.startsWith('your own') && (
+        <details className="ask-key">
+          <summary>{how ? 'Use your own Anthropic key instead' : 'Understand any wording: use your own Anthropic key'}</summary>
+          <form onSubmit={useKey}>
+            <input id="ask-key" type="password" value={key} onChange={e => setKey(e.target.value)} placeholder="sk-ant-..." aria-label="Your Anthropic API key" autoComplete="off" spellCheck={false} />
+            <button type="submit" className="ghost" disabled={!key.trim()}>Use it</button>
+          </form>
+          <p>Kept in this tool's memory on your computer until you close it. Never saved to disk, never sent anywhere but Anthropic. Only your question is sent, never the data.</p>
+          {keyProblem && <p className="error inline" role="alert">{keyProblem}</p>}
+        </details>
+      )}
     </section>
   )
 }

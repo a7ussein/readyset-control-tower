@@ -32,7 +32,7 @@ export async function saveReview(review: { key: string; status: 'confirmed' | 'd
   } catch { return false }
 }
 
-export interface ReleaseState { trusted: string | null; new: string | null; trusted_name: string | null; new_name: string | null; files: string[]; ai_understanding?: boolean }
+export interface ReleaseState { trusted: string | null; new: string | null; trusted_name: string | null; new_name: string | null; files: string[]; ai_understanding?: string }
 
 async function answer(response: Response): Promise<ReleaseState> {
   const body = await response.json().catch(() => ({}))
@@ -97,3 +97,7 @@ export const askQuestion = async (body: { q: string; for?: string; name?: string
 /** Open a sealed envelope (its number and four-word code) and compare its release with the trusted one. */
 export const openEnvelope = async (number: string, words: string) =>
   answer(await fetch(`${base}/api/envelope`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ number, words }) }))
+
+/** Give (or, with an empty string, forget) the user's own Anthropic key. Kept in the local tool's memory only. */
+export const setModelKey = async (key: string) =>
+  json<{ ai_understanding: string }>(await fetch(`${base}/api/model-key`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ key }) }))

@@ -270,6 +270,11 @@ class Server(unittest.TestCase):
             fh.write("import shutil, sys\n"
                      "if sys.argv[2:] != ['amber', 'falcon', 'river', 'quartz']: sys.exit('wrong code for this envelope')\n"
                      f"shutil.copytree({sealed!r}, 'envelopes/opened/E' + sys.argv[1] + '/release')\n")
+        work = os.path.join(d, "work")
+        os.makedirs(work)
+        back = os.getcwd()
+        os.chdir(work)                                                            # the files are written where the tool runs
+        self.addCleanup(os.chdir, back)
         httpd = make_server("127.0.0.1", 0, quiet=True, settings=os.path.join(d, "settings.json"))
         httpd.challenge = repo
         threading.Thread(target=httpd.serve_forever, daemon=True).start()
@@ -286,8 +291,31 @@ class Server(unittest.TestCase):
         self.assertEqual(self.post(base + "/api/envelope", {"number": "07; rm -rf", "words": "a b c d"})[0], 400)
         status, state = self.post(base + "/api/envelope", {"number": "07", "words": "Amber falcon  river quartz"})
         self.assertEqual((status, state["new_name"], state["trusted_name"]), (200, "E07", "raw"))
+        with open(os.path.join(work, "findings.json")) as fh:                      # the file the judges' checker reads
+            self.assertEqual([f["kind"] for f in json.load(fh)["findings"]], ["sample_swap"])
+        self.assertTrue(os.path.isfile(os.path.join(work, "audit-report.html")))
         doc = json.loads(self.get(base + "/api/findings")[1])
         self.assertEqual([f["kind"] for f in doc["findings"]], ["sample_swap"])
+
+    def test_the_users_own_key_is_kept_in_memory_only_and_never_shown_back(self):
+        from unittest import mock
+        base, d = self.live()
+        with mock.patch.dict(os.environ, {"READYSET_LOCAL_MODEL": "", "ANTHROPIC_API_KEY": ""}), \
+                mock.patch("control_tower.understand_ai.local_model", return_value=None):
+            self.assertEqual(json.loads(self.get(base + "/api/state")[1])["ai_understanding"], "")
+            self.assertEqual(self.post(base + "/api/model-key", {"key": "not a key"})[0], 400)
+            secret = "sk-ant-" + "x" * 40
+            status, said = self.post(base + "/api/model-key", {"key": secret})
+            self.assertEqual((status, said), (200, {"ai_understanding": "your own Anthropic key"}))
+            state = self.get(base + "/api/state")[1].decode()
+            self.assertIn("your own Anthropic key", state)
+            self.assertNotIn(secret, state)                                       # never shown back
+            for name in os.listdir(d):                                            # and never written to disk
+                path = os.path.join(d, name)
+                if os.path.isfile(path):
+                    with open(path, errors="ignore") as fh:
+                        self.assertNotIn(secret, fh.read())
+            self.assertEqual(self.post(base + "/api/model-key", {"key": ""})[1], {"ai_understanding": ""})
 
     def test_the_audit_report_says_the_same_things_in_plain_english(self):
         base, _ = self.live()

@@ -130,7 +130,7 @@ class Handler(BaseHTTPRequestHandler):
         if body.get("ai") is True:                    # only when the person switched it on, and only if a key is set
             from . import understand_ai
             if getattr(self.server, "router", None) is None:
-                self.server.router = understand_ai.make_router()
+                self.server.router = understand_ai.make_router(key=getattr(self.server, "model_key", None))
             router = self.server.router
         reply = ask(doc, question, actor, router)
         if body.get("check"):
@@ -189,7 +189,7 @@ class Handler(BaseHTTPRequestHandler):
         srv = self.server
         trusted, new = srv.releases or (None, None)
         from . import understand_ai
-        return {"trusted": trusted, "new": new, "files": list(FILES), "ai_understanding": understand_ai.available(),
+        return {"trusted": trusted, "new": new, "files": list(FILES), "ai_understanding": understand_ai.available(getattr(self.server, "model_key", None)),
                 "trusted_name": _label(trusted) if trusted else None,
                 "new_name": _label(new) if new else None}
 
@@ -334,6 +334,21 @@ class Handler(BaseHTTPRequestHandler):
                 remember_trusted(trusted, srv.settings_path)
         self._json(200, self._state())
 
+    def _model_key(self):
+        """Take the user's own API key for understanding wording: {"key": "sk-ant-..."}, or {"key": ""} to forget it.
+        It is kept in memory for as long as the page runs. It is never written to disk and never logged."""
+        from . import understand_ai
+        try:
+            key = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 2000)) or b"{}").get("key")
+        except (ValueError, AttributeError):
+            return self._json(400, {"detail": "expected a key"})
+        if key and not understand_ai.looks_like_a_key(key):
+            return self._json(400, {"detail": "That does not look like an Anthropic API key. They start with sk-ant-."})
+        with self.server.lock:
+            self.server.model_key = key or None
+            self.server.router = None
+        self._json(200, {"ai_understanding": understand_ai.available(self.server.model_key)})
+
     def _envelope(self):
         """Open a sealed envelope from the page: {"number": "07", "words": ["amber", "falcon", "river", "quartz"]}."""
         from .envelope import CannotOpen, open_envelope
@@ -347,15 +362,28 @@ class Handler(BaseHTTPRequestHandler):
             return self._json(400, {"detail": "expected the envelope's number and its four words"})
         except CannotOpen as e:
             return self._json(400, {"detail": str(e)})
+        try:                                   # the same two files the `envelope` command writes, where the tool was started
+            from .compare import compare
+            from .report import render
+            doc = compare(trusted, new)
+            with open("findings.json", "w", encoding="utf-8") as fh:
+                json.dump(doc, fh, indent=2)
+                fh.write("\n")
+            with open("audit-report.html", "w", encoding="utf-8") as fh:
+                fh.write(render(doc))
+        except Exception:                      # the page still shows the comparison; the files can be downloaded from it
+            pass
         self._use(trusted, new)
 
     def do_POST(self):
         try:
             parts = urlsplit(self.path)
-            if parts.path in ("/api/upload", "/api/release", "/api/question", "/api/envelope") and not self._local_only():
+            if parts.path in ("/api/upload", "/api/release", "/api/question", "/api/envelope", "/api/model-key") and not self._local_only():
                 return
             if parts.path == "/api/envelope":
                 return self._envelope()
+            if parts.path == "/api/model-key":
+                return self._model_key()
             if parts.path == "/api/question":
                 return self._add_question()
             if parts.path == "/api/upload":

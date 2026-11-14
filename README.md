@@ -149,11 +149,13 @@ asks again and shows the fingerprint did not change. A question the findings can
 and a clinical question is refused. It works for a named person with that person's rights on the page and no more:
 say "confirm F1" and it prepares your decision, and nothing is recorded until you press the button in your own name.
 
-Optional, and off unless you switch it on: with `OPENAI_API_KEY` set when the tool starts, the Ask panel offers
-"Understand any wording with an AI model". When the word list does not recognise a wording, the model is asked one
-thing, which of the fixed questions is meant. It is sent the question and the list of questions, never the findings or
-any data, and it writes none of the answer; the trace says when it was used. Without a key the switch does not exist
-and nothing is ever sent anywhere.
+Optional, and off unless you switch it on: "Understand any wording". When the word list does not recognise a wording,
+a language model is asked one thing, which of the fixed questions is meant. It is sent the question and the list of
+questions, never the findings or any data, and it writes none of the answer; the trace says when it was used. It
+follows the event rule "use a local model or the user's own key": paste your own Anthropic API key into the Ask panel
+(held in memory until you close the tool, never written to disk, never in this repository), or run a local model with
+[Ollama](https://ollama.com) and the tool finds it. With neither, the switch does not exist and nothing is ever sent
+anywhere.
 
 **Review.** Every finding waits for a person. On its page, enter your name and role and confirm or dismiss it. The
 review is saved in a small JSON file (`control-tower.reviews.json`, or beside the findings file) and is included
