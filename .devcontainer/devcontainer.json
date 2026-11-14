@@ -1,6 +1,6 @@
 {
   "name": "ReadySet Control Tower",
-  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
   "forwardPorts": [8010],
   "portsAttributes": {
     "8010": { "label": "ReadySet Control Tower", "onAutoForward": "openPreview" }
