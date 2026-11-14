@@ -93,6 +93,11 @@ def understand(text):
         return "clinical", clinical, scores
     if "so what" in str(text or "").lower():
         return "matters", ["so", "what"], scores
+    # Being asked to guess, to say which release is right, or to drop its rules, is a question about its limits.
+    pressed = re.search(r"\bguess|which (release|version|one|file|of them) is (correct|right|true|wrong|better)|"
+                        r"ignore (your|the|all|any) (rules|instructions|limits)|just tell me", str(text or "").lower())
+    if pressed:
+        return "limits", [pressed.group(0)], scores
     best = max(scores.values()) if scores else 0
     if best < 2:
         return None, [], scores
@@ -286,6 +291,8 @@ def ask(doc, text, actor=None, router=None):
         sources = [_source(f, x) for f in about]
 
     elif intent == "limits":
+        answer.append("I do not guess, and I cannot say which of the two releases is the correct one. I can show that they "
+                      "differ, where, and what that does to your results. This is what the tool cannot tell you:")
         answer += [f"{_name(f)}: {f.get('limitation')}" for f in about if f.get("limitation")]
         if x.get("scope"):
             answer.append(str(x["scope"]))

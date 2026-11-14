@@ -399,7 +399,7 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step, waiti
       </div>
 
       <div className="mores">
-        <More title="What this cannot tell you"><p>{text(finding.limitation, 'No limit was recorded.')}</p></More>
+        <More title="What this cannot tell you" open><p>{text(finding.limitation, 'No limit was recorded.')}</p></More>
         {rule && (
           <More title="How the tool decided this">
             <dl className="rules">
@@ -965,7 +965,7 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
                     <span className="stepper-text"><b>{titleOf(f)}</b>
                       <small>{r ? (r.status === 'confirmed' ? 'Confirmed' : 'Dismissed')
                         : Array.isArray(f.affects_analyses) && f.affects_analyses.length ? 'Waiting for you' : 'Does not reach your analyses'}{' '}
-                        <span className={`sev sev-${text(f.severity)}`}>{text(f.severity)}</span></small></span>
+                        <span className={`sev sev-${text(f.severity)}`}>{text(f.severity)}{!(Array.isArray(f.affects_analyses) && f.affects_analyses.length) && text(f.severity) === 'low' ? ' for these analyses' : ''}</span></small></span>
                   </button>
                 </li>
               )
