@@ -157,6 +157,11 @@ follows the event rule "use a local model or the user's own key": paste your own
 [Ollama](https://ollama.com) and the tool finds it. With neither, the switch does not exist and nothing is ever sent
 anywhere.
 
+**See the data.** Every change, and every source in an Ask answer, has "See the data in both files". It opens the two
+files side by side for the samples involved: each row with the text in the trusted release beside the text in the new
+one, exactly as written and unrounded, with every cell that differs marked. For a swap you can read down the columns
+and see each sample holding the other's values.
+
 **Review.** Every finding waits for a person. On its page, enter your name and role and confirm or dismiss it. The
 review is saved in a small JSON file (`control-tower.reviews.json`, or beside the findings file) and is included
 when you download `findings.json` from the page.
