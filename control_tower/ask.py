@@ -2,7 +2,7 @@
 
     reply = ask(doc, "is it safe to use?")
 
-There is no language model here. A question is matched to one of a fixed list of questions by the words in it, and the
+No language model writes any answer. A question is matched to one of a fixed list of questions by the words in it, and the
 answer is built from fields of the findings document by fixed sentence patterns, the same way the audit report is. So:
 
   - the same question about the same findings always gives the same answer, word for word (`fingerprint` proves it);
@@ -137,12 +137,16 @@ def _moved(analysis):
             if not isinstance(before.get(k), dict) and before.get(k) != after.get(k) and k in after]
 
 
-def ask(doc, text, actor=None):
+def ask(doc, text, actor=None, router=None):
     """Answer one question about one findings document. Same inputs, same output, always.
 
     `actor` is the person the assistant is working for: {"name": ..., "role": ...}. The assistant has that person's
     rights on the page and no more: it reads the findings, and it can prepare their decision on a change for them to
-    record in their own name. With no named person it records nothing."""
+    record in their own name. With no named person it records nothing.
+
+    `router` is optional help with unusual wording (see understand_ai.py): a function that names which fixed question
+    a wording is closest to. It is consulted only when the word list understood nothing, it never sees `doc`, and the
+    answer is built the same way whoever understood the question."""
     actor = actor if isinstance(actor, dict) else {}
     who, role = str(actor.get("name") or "").strip()[:200], str(actor.get("role") or "").strip()[:200]
     x = doc.get("x_readyset") if isinstance(doc.get("x_readyset"), dict) else {}
@@ -164,6 +168,11 @@ def ask(doc, text, actor=None):
         intent, matched = "act", [verb, str(explicit[0].get("id"))]
     elif intent is None and named_f:
         intent, matched = "changed", [str(f.get("id")) for f in named_f]       # a change was named and nothing else asked
+    routed = False
+    if intent is None and router is not None:
+        choice = router(str(text or ""))
+        if choice in {i for i, _, _ in INTENTS}:
+            intent, matched, routed = choice, [], True
     about = named_f or findings
     answer, read, sources = [], [], []
 
@@ -341,8 +350,12 @@ def ask(doc, text, actor=None):
     understood = TITLES.get(intent)
     trace = [
         {"step": "Read the question",
-         "detail": (f"Matched the words {', '.join(repr(w) for w in matched)} to the question \"{understood}\"."
-                    if intent else "No question on the fixed list matched the words in it, so I did not answer.")},
+         "detail": ((f"My word list did not recognise this wording, so a language model was asked one thing: which of my "
+                     f"fixed questions is this closest to? It chose \"{understood}\". It was sent your question and the "
+                     f"list of questions. It was not sent the findings or any data, and it wrote none of this answer.")
+                    if routed else
+                    (f"Matched the words {', '.join(repr(w) for w in matched)} to the question \"{understood}\"."
+                     if intent else "No question on the fixed list matched the words in it, so I did not answer."))},
     ]
     if intent and (named_f or named_a):
         trace.append({"step": "Narrowed it",
@@ -365,14 +378,15 @@ def ask(doc, text, actor=None):
     based_on = findings_fingerprint(doc)
     reply = {"question": str(text or ""), "can_answer": intent is not None, "understood_as": understood, "intent": intent,
              "answer": answer, "trace": trace, "sources": sources, "suggestions": [t for _, t, _ in INTENTS],
+             "understood_by": "a language model, for the wording only" if routed else "the fixed word list",
              "based_on": based_on, "action": action, "acting_for": {"name": who, "role": role} if who and role else None}
     reply["fingerprint"] = _hash({"intent": intent, "answer": answer, "based_on": based_on, "action": action,
                                   "focus": [f.get("id") for f in named_f] + list(named_a)})
     return reply
 
 
-def consistency(doc, text, times=100, actor=None):
+def consistency(doc, text, times=100, actor=None, router=None):
     """Ask the same question many times and count the different answers. The count must be 1."""
     times = max(2, min(int(times), 1000))
-    seen = {json.dumps(ask(doc, text, actor), sort_keys=True) for _ in range(times)}
-    return {"asked": times, "different_answers": len(seen), "fingerprint": ask(doc, text, actor)["fingerprint"]}
+    seen = {json.dumps(ask(doc, text, actor, router), sort_keys=True) for _ in range(times)}
+    return {"asked": times, "different_answers": len(seen), "fingerprint": ask(doc, text, actor, router)["fingerprint"]}

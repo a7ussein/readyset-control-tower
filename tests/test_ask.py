@@ -76,6 +76,26 @@ class Ask(unittest.TestCase):
         self.assertIn("Nothing is recorded until you press the button", mine["answer"][-1])
         self.assertEqual(self.doc["findings"][0]["needs_human_review"], True)          # asking changed nothing
 
+    def test_a_model_may_help_with_wording_only_and_never_sees_the_findings(self):
+        from control_tower.understand_ai import make_router
+        seen = []
+        router = make_router(lambda text: (seen.append(text), "limits")[1])
+        odd = "where are the blind spots here"
+        self.assertFalse(ask(self.doc, odd)["can_answer"])                              # the word list alone cannot
+        helped = ask(self.doc, odd, router=router)
+        self.assertEqual((helped["intent"], helped["understood_by"]), ("limits", "a language model, for the wording only"))
+        plain = ask(self.doc, "what can the tool not tell me")
+        self.assertEqual(helped["answer"], plain["answer"])                             # the answer is the fixed one
+        self.assertEqual(seen, [odd])                                                   # it was sent the question, nothing else
+        self.assertEqual(consistency(self.doc, odd, 50, router=router)["different_answers"], 1)
+        self.assertEqual(len(seen), 1)                                                  # one reading per wording is kept
+        ask(self.doc, "can I use it?", router=router)
+        self.assertEqual(len(seen), 1)                                                  # not consulted when the words suffice
+        self.assertFalse(ask(self.doc, odd, router=make_router(lambda text: "tell a joke"))["can_answer"])
+        broken = make_router(lambda text: (_ for _ in ()).throw(OSError("no network")))
+        self.assertFalse(ask(self.doc, odd, router=broken)["can_answer"])               # no network: it says it cannot answer
+        self.assertEqual(ask(self.doc, "will this patient survive", router=router)["intent"], "clinical")
+
     def test_understanding_a_question_uses_no_randomness(self):
         self.assertEqual({understand("why is it rated high?")[0] for _ in range(50)}, {"severity"})
 

@@ -814,7 +814,7 @@ export default function App() {
         {raw && !(state?.trusted && !state.new) && <SectionBoundary name="result"><div className={working ? 'stale' : undefined}><Bench raw={raw} onQuestion={onQuestion} onChanged={() => load(asked)}
           release={state && <ReleaseBox key={`${state.trusted}|${state.new}`} state={state} onLoaded={onLoaded} />} /></div></SectionBoundary>}
       </main>
-      {raw && valid && !usingExample && !(state?.trusted && !state.new) && <Ask asked={asked} onChanged={() => load(asked)} />}
+      {raw && valid && !usingExample && !(state?.trusted && !state.new) && <Ask asked={asked} onChanged={() => load(asked)} canUseModel={!!state?.ai_understanding} />}
       <footer>Built by team Automyte. De-identified TCGA research data. Research use only, not a clinical tool.</footer>
     </>
   )

@@ -32,7 +32,7 @@ export async function saveReview(review: { key: string; status: 'confirmed' | 'd
   } catch { return false }
 }
 
-export interface ReleaseState { trusted: string | null; new: string | null; trusted_name: string | null; new_name: string | null; files: string[] }
+export interface ReleaseState { trusted: string | null; new: string | null; trusted_name: string | null; new_name: string | null; files: string[]; ai_understanding?: boolean }
 
 async function answer(response: Response): Promise<ReleaseState> {
   const body = await response.json().catch(() => ({}))
@@ -84,14 +84,14 @@ export const rowNames = async (file: string, typed: string) => json<{ rows: stri
 export const addAnalysis = async (spec: Record<string, unknown>) => json<{ id: string; title: string }>(await fetch(`${base}/api/question`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(spec) }))
 
 export interface AskReply {
-  question: string; can_answer: boolean; understood_as: string | null; intent: string | null; answer: string[]
+  question: string; can_answer: boolean; understood_as: string | null; understood_by?: string; intent: string | null; answer: string[]
   trace: { step: string; detail: string }[]; suggestions: string[]; fingerprint: string; based_on: string
   sources: { finding: string; file: string; samples: string[]; check?: { row: string; releases: string[]; values: { sample: string; before: string; after: string }[] } }[]
   action: { finding: string; key: string; status: 'confirmed' | 'dismissed'; fix: 'approved' | ''; reviewer: string; role: string; note: string } | null
   consistency?: { asked: number; different_answers: number; fingerprint: string }
 }
 /** Ask a question in plain words. Answered from the findings by fixed patterns: no language model. */
-export const askQuestion = async (body: { q: string; for?: string; name?: string; role?: string; check?: number }) =>
+export const askQuestion = async (body: { q: string; for?: string; name?: string; role?: string; check?: number; ai?: boolean }) =>
   json<AskReply>(await fetch(`${base}/api/ask`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) }))
 
 /** Open a sealed envelope (its number and four-word code) and compare its release with the trusted one. */

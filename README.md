@@ -141,13 +141,19 @@ On the page you can also press "Add an analysis of your own" and build one from 
 columns, with no file to write.
 
 **Ask.** Press "Ask about this release" on the page and ask in your own words, typed or spoken: can I use it, why
-does it matter, what should I do, what can you not tell me. There is no language model behind it. A question is matched
+does it matter, what should I do, what can you not tell me. No language model writes any answer. A question is matched
 to a fixed list by its words and the answer is built from the findings by fixed sentences, so the same question about
 the same findings always gives the same answer, word for word. Every answer shows how it was reached (the words it
 matched, the fields it read, the file, samples and numbers it rests on) and a fingerprint; "Ask it 100 more times"
 asks again and shows the fingerprint did not change. A question the findings cannot answer gets "I cannot answer that",
 and a clinical question is refused. It works for a named person with that person's rights on the page and no more:
 say "confirm F1" and it prepares your decision, and nothing is recorded until you press the button in your own name.
+
+Optional, and off unless you switch it on: with `OPENAI_API_KEY` set when the tool starts, the Ask panel offers
+"Understand any wording with an AI model". When the word list does not recognise a wording, the model is asked one
+thing, which of the fixed questions is meant. It is sent the question and the list of questions, never the findings or
+any data, and it writes none of the answer; the trace says when it was used. Without a key the switch does not exist
+and nothing is ever sent anywhere.
 
 **Review.** Every finding waits for a person. On its page, enter your name and role and confirm or dismiss it. The
 review is saved in a small JSON file (`control-tower.reviews.json`, or beside the findings file) and is included

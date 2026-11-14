@@ -126,10 +126,16 @@ class Handler(BaseHTTPRequestHandler):
         if status != 200 or not isinstance(doc, dict) or not isinstance(doc.get("findings"), list):
             return self._json(status if status != 200 else 500, doc if isinstance(doc, dict) else {"detail": "no findings to ask about"})
         actor = {"name": body.get("name"), "role": body.get("role")}
-        reply = ask(doc, question, actor)
+        router = None
+        if body.get("ai") is True:                    # only when the person switched it on, and only if a key is set
+            from . import understand_ai
+            if getattr(self.server, "router", None) is None:
+                self.server.router = understand_ai.make_router()
+            router = self.server.router
+        reply = ask(doc, question, actor, router)
         if body.get("check"):
             try:
-                reply["consistency"] = consistency(doc, question, int(body["check"]), actor)
+                reply["consistency"] = consistency(doc, question, int(body["check"]), actor, router)
             except (ValueError, TypeError):
                 pass
         self._json(200, reply)
@@ -182,7 +188,8 @@ class Handler(BaseHTTPRequestHandler):
     def _state(self):
         srv = self.server
         trusted, new = srv.releases or (None, None)
-        return {"trusted": trusted, "new": new, "files": list(FILES),
+        from . import understand_ai
+        return {"trusted": trusted, "new": new, "files": list(FILES), "ai_understanding": understand_ai.available(),
                 "trusted_name": _label(trusted) if trusted else None,
                 "new_name": _label(new) if new else None}
 
