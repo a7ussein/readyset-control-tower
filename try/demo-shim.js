@@ -81,6 +81,24 @@
       keep()
       return json(200, { saved: body.status !== 'cleared', kept_in: 'this browser only' })
     }
+    if (path === '/api/ask' && method === 'POST') {
+      let body
+      try { body = JSON.parse(typeof init.body === 'string' ? init.body : await new Response(init.body).text()) } catch { body = null }
+      if (!body || typeof body.q !== 'string' || !body.q.trim() || body.q.length > 500) return json(400, { detail: 'ask a question of up to 500 characters' })
+      const doc = await findings(body.for)
+      if (!doc) return json(400, { detail: NEEDS_TOOL })
+      let py
+      try { py = await toolCode() } catch { return json(500, { detail: 'The assistant could not start in this browser. Reload the page and try again.' }) }
+      py.globals.set('doc_text', JSON.stringify(doc))
+      py.globals.set('ask_text', JSON.stringify({ q: body.q, name: body.name || '', role: body.role || '', check: Number(body.check) || 0 }))
+      const reply = py.runPython(`
+_d = json.loads(doc_text); _a = json.loads(ask_text); _who = {"name": _a["name"], "role": _a["role"]}
+_r = ask.ask(_d, _a["q"], _who)
+if _a["check"]:
+    _r["consistency"] = ask.consistency(_d, _a["q"], _a["check"], _who)
+json.dumps(_r)`)
+      return new Response(reply, { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }
     return json(400, { detail: NEEDS_TOOL })
   }
 
@@ -91,9 +109,9 @@
     return api(url, init).catch(() => json(500, { detail: 'The demo could not load its recorded answer. Reload the page.' }))
   }
 
-  // ---- the audit report: written by the tool's own report code, run here in the browser -----------------------------
+  // ---- the tool's own Python (the report writer and the assistant), run here in the browser ------------------------
   let python
-  const reportCode = () => (python ??= (async () => {
+  const toolCode = () => (python ??= (async () => {
     await new Promise((ok, fail) => {
       const s = document.createElement('script')
       s.src = 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js'
@@ -101,8 +119,9 @@
       document.head.appendChild(s)
     })
     const py = await window.loadPyodide({ indexURL: 'https://cdn.jsdelivr.net/pyodide/v0.26.4/full/' })
-    py.FS.writeFile('/home/pyodide/report.py', await load('py/report.py'))
-    py.runPython('import json, report')
+    py.FS.mkdirTree('/home/pyodide/control_tower')
+    for (const name of ['__init__.py', 'report.py', 'ask.py']) py.FS.writeFile('/home/pyodide/control_tower/' + name, await load('py/control_tower/' + name))
+    py.runPython('import json\nfrom control_tower import report, ask')
     return py
   })().catch(e => { python = undefined; throw e }))
 
@@ -127,7 +146,7 @@
       const doc = await findings(wanted)
       let html
       try {
-        const py = await reportCode()
+        const py = await toolCode()
         py.globals.set('doc_text', JSON.stringify(doc))
         html = py.runPython('report.render(json.loads(doc_text))')
       } catch {
@@ -146,9 +165,11 @@
     bar.setAttribute('role', 'note')
     bar.style.cssText = 'background:#3B2F8F;color:#fff;font:500 14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;padding:10px 16px;text-align:center'
     bar.innerHTML = 'Online demo. This is the organisers’ practice release, as the tool compared it. Change the question, open a finding, ' +
-      'sign it off, download the report. Your sign-offs stay in this browser. With your own data the tool runs on your computer and uploads nothing. ' +
+      'sign it off, ask it a question, download the report. Your sign-offs stay in this browser. With your own data the tool runs on your computer and uploads nothing. ' +
       '<a style="color:#fff;font-weight:700" href="https://github.com/a7ussein/readyset-control-tower#start-here-see-it-running-in-one-minute">Get the tool</a>'
     document.body.insertBefore(bar, document.body.firstChild)
   }
   if (document.body) banner(); else document.addEventListener('DOMContentLoaded', banner)
+  // Start the tool's Python quietly once the page has settled, so the first question is answered without a wait.
+  addEventListener('load', () => setTimeout(() => { toolCode().catch(() => {}) }, 1500))
 })()
