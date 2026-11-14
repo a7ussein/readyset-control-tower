@@ -2,7 +2,7 @@
 """Assemble the hosted demo in hosted/out: the page, the recorded answers for the practice release, the tool's own
 Python for the browser, and the one server function.   python3 hosted/build.py   (needs Node, for the page build)
 
-The recorded answers in hosted/data were written by this tool comparing the organisers' practice release. They are
+The recorded answers in hosted/recorded were written by this tool comparing the organisers' practice release. They are
 findings, not data files. The page runs the tool's report, change log and assistant code in the browser (Pyodide).
 """
 import glob
@@ -32,7 +32,7 @@ page = page.replace("<title>ReadySet Control Tower</title>", "<title>ReadySet Co
 with open(index, "w", encoding="utf-8") as fh:
     fh.write(page)
 shutil.copy(os.path.join(here, "demo-shim.js"), out)
-shutil.copytree(os.path.join(here, "data"), os.path.join(out, "data"))
+shutil.copytree(os.path.join(here, "recorded"), os.path.join(out, "data"))
 shutil.copytree(os.path.join(here, "api"), os.path.join(out, "api"))
 package = os.path.join(out, "py", "control_tower")
 os.makedirs(package)

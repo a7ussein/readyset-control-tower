@@ -1,0 +1,1 @@
+{"trusted": "raw", "new": "practice-B", "files": ["clinical.tsv", "survival.tsv", "mutation_gene_level.tsv.gz", "protein_rppa.tsv.gz", "copy_number_gistic.tsv.gz", "rna_hiseq.tsv.gz"], "trusted_name": "raw", "new_name": "practice-B"}
