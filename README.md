@@ -4,9 +4,9 @@ Team **Automyte** · OncoSys Cancer AI Lab, Nov 11–14 2026 · Track: Cohort Fi
 
 ## Start here: see it running in one minute
 
-[![Try it in your browser](https://img.shields.io/badge/Try_it_now-in_your_browser-1F8A5B?style=for-the-badge)](https://a7ussein.github.io/readyset-control-tower/try/) [![Watch the demo video](https://img.shields.io/badge/Watch_the_demo-2_and_a_half_minutes-E0457B?style=for-the-badge)](https://a7ussein.github.io/readyset-control-tower/) [![Download the tool as a ZIP file](https://img.shields.io/badge/Download_the_tool-ZIP_file-3B2F8F?style=for-the-badge)](https://github.com/a7ussein/readyset-control-tower/archive/refs/heads/main.zip)
+[![Try it in your browser](https://img.shields.io/badge/Try_it_now-in_your_browser-1F8A5B?style=for-the-badge)](https://readyset-control-tower.vercel.app/) [![Watch the demo video](https://img.shields.io/badge/Watch_the_demo-2_and_a_half_minutes-E0457B?style=for-the-badge)](https://a7ussein.github.io/readyset-control-tower/) [![Download the tool as a ZIP file](https://img.shields.io/badge/Download_the_tool-ZIP_file-3B2F8F?style=for-the-badge)](https://github.com/a7ussein/readyset-control-tower/archive/refs/heads/main.zip)
 
-**To try it,** click Try it now. Nothing to install: the page opens in your browser on the organisers' practice release, as the tool compared it. Switch an analysis off and on, open a finding, sign it off, download the report. It works on a phone too. The comparison itself was run beforehand; to compare your own data, run the tool on your own computer, where nothing is uploaded.
+**To try it,** click Try it now. Nothing to install: the page opens in your browser on the organisers' practice release, as the tool compared it. Switch an analysis off and on, open a finding, sign it off, ask it a question in your own words, and download the report and the change log. It works on a phone too. The comparison itself was run beforehand; to compare your own data, run the tool on your own computer, where nothing is uploaded.
 
 **To just watch,** click Watch the demo. **To run it on your own computer:**
 
