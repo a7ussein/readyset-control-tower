@@ -2,10 +2,11 @@
 // Everything it shows comes from findings.json (docs/OUTPUT-CONTRACT.md). It counts and formats; it computes no results.
 import { useEffect, useMemo, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import './bench.css'
-import { addAnalysis, analysisOptions, columnValues, loadFindings, releaseState, reportUrl, rowNames, saveReview, setRelease, uploadRelease, usingExample, type AnalysisOptions, type ReleaseState } from './api'
+import { addAnalysis, analysisOptions, columnValues, loadFindings, openEnvelope, releaseState, reportUrl, rowNames, saveReview, setRelease, uploadRelease, usingExample, type AnalysisOptions, type ReleaseState } from './api'
 import type { Analysis, FileInfo, Finding, Findings, Pointer, Repair, Review, Witness } from './findings'
 import { useTheme } from './theme'
 import { SectionBoundary } from './SectionBoundary'
+import { Ask } from './Ask'
 
 // ---- reading a file that may be malformed --------------------------------------------------------------------------
 const list = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v.filter(x => x && typeof x === 'object' && !Array.isArray(x)) as T[]) : [])
@@ -539,6 +540,8 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
   const [problem, setProblem] = useState('')
   const [path, setPath] = useState('')
   const [trusted, setTrusted] = useState('')
+  const [envelope, setEnvelope] = useState('')
+  const [code, setCode] = useState('')
   const folderInput = useRef<HTMLInputElement>(null)
   const zipInput = useRef<HTMLInputElement>(null)
   const run = async (work: () => Promise<ReleaseState>) => {
@@ -603,7 +606,17 @@ function ReleaseBox({ state, onLoaded }: { state: ReleaseState; onLoaded: (s: Re
         <input id="new-path" value={path} onChange={e => setPath(e.target.value)} placeholder="/Users/you/Desktop/hidden-release" spellCheck={false} disabled={!state.trusted} />
         <button type="submit" className="primary" disabled={!path.trim() || !state.trusted || !!busy}>Compare</button>
       </form>
+      <form className="path-row envelope-row" onSubmit={e => { e.preventDefault(); if (envelope.trim() && code.trim()) { setBusy('Opening the envelope'); run(() => openEnvelope(envelope.trim(), code.trim())) } }}>
+        <label htmlFor="envelope-number">Or open a sealed envelope: its number and its four words</label>
+        <input id="envelope-number" className="short" value={envelope} onChange={e => setEnvelope(e.target.value)} placeholder="07" spellCheck={false} autoComplete="off" />
+        <input id="envelope-code" value={code} onChange={e => setCode(e.target.value)} placeholder="amber falcon river quartz" spellCheck={false} autoComplete="off" aria-label="The four words" />
+        <button type="submit" className="primary" disabled={!envelope.trim() || code.trim().split(/\s+/).length !== 4 || !!busy}>Open and compare</button>
+      </form>
       {problem && <p className="error inline" role="alert">{problem}</p>}
+      <details className="dev-mode">
+        <summary>Developer mode</summary>
+        <p>Everything on this page can also be run from a terminal, for scripts and pipelines. Compare two releases: <code>python3 -m control_tower compare TRUSTED NEW --out findings.json</code>. Open an envelope: <code>python3 -m control_tower envelope 07 amber falcon river quartz</code>. The README has the rest.</p>
+      </details>
     </section>
   )
 }
@@ -801,6 +814,7 @@ export default function App() {
         {raw && !(state?.trusted && !state.new) && <SectionBoundary name="result"><div className={working ? 'stale' : undefined}><Bench raw={raw} onQuestion={onQuestion} onChanged={() => load(asked)}
           release={state && <ReleaseBox key={`${state.trusted}|${state.new}`} state={state} onLoaded={onLoaded} />} /></div></SectionBoundary>}
       </main>
+      {raw && valid && !usingExample && !(state?.trusted && !state.new) && <Ask asked={asked} onChanged={() => load(asked)} />}
       <footer>Built by team Automyte. De-identified TCGA research data. Research use only, not a clinical tool.</footer>
     </>
   )

@@ -13,10 +13,13 @@ Team **Automyte** · OncoSys Cancer AI Lab, Nov 11–14 2026 · Track: Cohort Fi
 1. Click Download the tool, then unzip the file. You get a folder called `readyset-control-tower-main`.
 2. Start it:
    - **Windows:** open the folder and double-click `run.bat`.
-   - **Mac or Linux:** open Terminal, type `cd ` (with a space after it), drag the folder onto the Terminal window, press Enter, then type `./run.sh` and press Enter.
+   - **Mac:** open the folder and double-click `run.command`. The first time, macOS may refuse a downloaded file: right-click it, choose Open, then Open again.
+   - **Linux, or if you prefer a terminal:** in the folder, run `./run.sh`.
 3. Your browser opens the page at http://localhost:8010 with a worked example. To stop, close the Terminal or Command Prompt window.
 
-The only thing it needs is Python 3.9 or newer ([download Python](https://www.python.org/downloads/)). There is nothing else to install and no account to make. The example uses invented data; comparing real releases is covered under [Setup and run](#setup-and-run).
+**Everything is done on the page.** Open a sealed envelope by typing its number and four words, or drop a new release on the page. Switch your analyses on and off, read each change, sign your decision, ask questions in your own words, and download the report. No terminal is needed after the page is open; the command line is there for people who want it, under [Developer mode](#developer-mode-setup-and-the-command-line).
+
+The only thing it needs is Python 3.9 or newer ([download Python](https://www.python.org/downloads/)). There is nothing else to install and no account to make. The example uses invented data; comparing real releases is covered under [Developer mode](#developer-mode-setup-and-the-command-line).
 
 **What you are looking at:** when a research dataset gets a new release, this page answers one question: is the new release safe for the result you rely on? It shows what changed, why each change matters, what to do next, and what the tool cannot tell you.
 
@@ -37,7 +40,9 @@ The comparison engine and the page both work. The engine is tested, and the two 
 - [`docs/ENGINE-PLAN.md`](docs/ENGINE-PLAN.md): how the engine works, with measurements on the real files.
 - [`web/README.md`](web/README.md): the page, and how to work on it.
 
-## Setup and run
+## Developer mode: setup and the command line
+
+The page does everything a researcher needs. This section is for people who want the terminal: fetching the data, scripting a comparison, running it in a pipeline.
 
 Our tool needs Python 3.9 or newer and nothing else. Only the organisers' own scripts (fetching the data, building the practice release, validating the output) need two packages, covered below.
 
@@ -97,7 +102,8 @@ Or let the page compare the two folders itself, which also lets you change the q
 ./run.sh serve $D/raw $D/releases/practice-B     # http://localhost:8010  (run.bat on Windows)
 ```
 
-**Saturday's sealed envelope.** The organisers hand over an envelope number and a four-word code. One command opens
+**Saturday's sealed envelope.** The organisers hand over an envelope number and a four-word code. On the page, press
+"Compare a different release", type the number and the four words, and press "Open and compare". From a terminal, one command opens
 it with their `unseal.py`, compares its release with the trusted one, writes `findings.json` and `audit-report.html`,
 and shows the result on the page if the page is running (the practice envelope's code is public):
 
@@ -133,6 +139,15 @@ release the answer is Conditional when A1 is in the question and Ready when only
 
 On the page you can also press "Add an analysis of your own" and build one from the data's own files, rows and
 columns, with no file to write.
+
+**Ask.** Press "Ask about this release" on the page and ask in your own words, typed or spoken: can I use it, why
+does it matter, what should I do, what can you not tell me. There is no language model behind it. A question is matched
+to a fixed list by its words and the answer is built from the findings by fixed sentences, so the same question about
+the same findings always gives the same answer, word for word. Every answer shows how it was reached (the words it
+matched, the fields it read, the file, samples and numbers it rests on) and a fingerprint; "Ask it 100 more times"
+asks again and shows the fingerprint did not change. A question the findings cannot answer gets "I cannot answer that",
+and a clinical question is refused. It works for a named person with that person's rights on the page and no more:
+say "confirm F1" and it prepares your decision, and nothing is recorded until you press the button in your own name.
 
 **Review.** Every finding waits for a person. On its page, enter your name and role and confirm or dismiss it. The
 review is saved in a small JSON file (`control-tower.reviews.json`, or beside the findings file) and is included

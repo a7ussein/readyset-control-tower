@@ -98,7 +98,8 @@ class Handler(BaseHTTPRequestHandler):
             return 500, {"detail": f"{srv.findings_path} is not valid JSON"}
         return 200, doc
 
-    def _findings(self, wanted, as_report=False):
+    def _reviewed(self, wanted):
+        """(status, the findings document with every saved review written into it)."""
         status, doc = self._document(wanted)
         if status == 200 and isinstance(doc, dict) and isinstance(doc.get("findings"), list):
             new_release = release_name(doc)
@@ -109,6 +110,32 @@ class Handler(BaseHTTPRequestHandler):
                 x["review_keys"] = keys
                 x["reviews"] = [dict(saved[k], finding=fid, release=new_release) for fid, k in keys.items() if k in saved]
                 apply_reviews(doc, {fid: saved[k] for fid, k in keys.items() if k in saved})
+        return status, doc
+
+    def _ask(self):
+        """Answer a question in plain words from the current findings. No language model: see ask.py."""
+        from .ask import ask, consistency
+        try:
+            body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 20000)) or b"{}")
+            question = body["q"]
+            if not isinstance(question, str) or not question.strip() or len(question) > 500:
+                raise ValueError
+        except (ValueError, KeyError, TypeError):
+            return self._json(400, {"detail": "ask a question of up to 500 characters"})
+        status, doc = self._reviewed(str(body.get("for") or ""))
+        if status != 200 or not isinstance(doc, dict) or not isinstance(doc.get("findings"), list):
+            return self._json(status if status != 200 else 500, doc if isinstance(doc, dict) else {"detail": "no findings to ask about"})
+        actor = {"name": body.get("name"), "role": body.get("role")}
+        reply = ask(doc, question, actor)
+        if body.get("check"):
+            try:
+                reply["consistency"] = consistency(doc, question, int(body["check"]), actor)
+            except (ValueError, TypeError):
+                pass
+        self._json(200, reply)
+
+    def _findings(self, wanted, as_report=False):
+        status, doc = self._reviewed(wanted)
         if as_report and status == 200:
             from .report import render
             body = render(doc).encode("utf-8")
@@ -287,6 +314,10 @@ class Handler(BaseHTTPRequestHandler):
                     raise NotARelease("the question file does not fit the trusted release. " + "; ".join(problems))
         except NotARelease as e:
             return self._json(400, {"detail": str(e)})
+        self._use(trusted, new)
+
+    def _use(self, trusted, new):
+        srv = self.server
         with srv.lock:
             srv.releases = (trusted, new)
             srv.cache.clear()
@@ -296,11 +327,28 @@ class Handler(BaseHTTPRequestHandler):
                 remember_trusted(trusted, srv.settings_path)
         self._json(200, self._state())
 
+    def _envelope(self):
+        """Open a sealed envelope from the page: {"number": "07", "words": ["amber", "falcon", "river", "quartz"]}."""
+        from .envelope import CannotOpen, open_envelope
+        try:
+            body = json.loads(self.rfile.read(min(int(self.headers.get("Content-Length") or 0), 2000)) or b"{}")
+            words = body.get("words")
+            words = words.split() if isinstance(words, str) else words
+            trusted, new = open_envelope(body.get("number"), words if isinstance(words, list) else [],
+                                         getattr(self.server, "challenge", None))
+        except (ValueError, AttributeError):
+            return self._json(400, {"detail": "expected the envelope's number and its four words"})
+        except CannotOpen as e:
+            return self._json(400, {"detail": str(e)})
+        self._use(trusted, new)
+
     def do_POST(self):
         try:
             parts = urlsplit(self.path)
-            if parts.path in ("/api/upload", "/api/release", "/api/question") and not self._local_only():
+            if parts.path in ("/api/upload", "/api/release", "/api/question", "/api/envelope") and not self._local_only():
                 return
+            if parts.path == "/api/envelope":
+                return self._envelope()
             if parts.path == "/api/question":
                 return self._add_question()
             if parts.path == "/api/upload":
@@ -309,6 +357,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._set_release()
             if urlsplit(self.path).path == "/api/reviews":
                 return self._review()
+            if parts.path == "/api/ask":
+                return self._ask()
             self._json(404, {"detail": f"no such endpoint: POST {urlsplit(self.path).path}"})
         except (BrokenPipeError, ConnectionResetError):
             pass

@@ -82,3 +82,17 @@ export const analysisOptions = async () => json<AnalysisOptions>(await fetch(`${
 export const columnValues = async (column: string) => json<{ values: { value: string; samples: number }[]; distinct: number }>(await fetch(`${base}/api/options?column=${encodeURIComponent(column)}`))
 export const rowNames = async (file: string, typed: string) => json<{ rows: string[]; total: number }>(await fetch(`${base}/api/options?file=${encodeURIComponent(file)}&q=${encodeURIComponent(typed)}`))
 export const addAnalysis = async (spec: Record<string, unknown>) => json<{ id: string; title: string }>(await fetch(`${base}/api/question`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(spec) }))
+
+export interface AskReply {
+  question: string; can_answer: boolean; understood_as: string | null; intent: string | null; answer: string[]
+  trace: { step: string; detail: string }[]; suggestions: string[]; fingerprint: string; based_on: string
+  action: { finding: string; key: string; status: 'confirmed' | 'dismissed'; fix: 'approved' | ''; reviewer: string; role: string; note: string } | null
+  consistency?: { asked: number; different_answers: number; fingerprint: string }
+}
+/** Ask a question in plain words. Answered from the findings by fixed patterns: no language model. */
+export const askQuestion = async (body: { q: string; for?: string; name?: string; role?: string; check?: number }) =>
+  json<AskReply>(await fetch(`${base}/api/ask`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) }))
+
+/** Open a sealed envelope (its number and four-word code) and compare its release with the trusted one. */
+export const openEnvelope = async (number: string, words: string) =>
+  answer(await fetch(`${base}/api/envelope`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ number, words }) }))

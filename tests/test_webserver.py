@@ -241,6 +241,54 @@ class Server(unittest.TestCase):
         self.assertEqual(now["needs_human_review"], True)                          # it waits for a fresh review
         self.assertEqual(changed["x_readyset"]["reviews"], [])
 
+    def test_the_page_can_ask_a_question_and_gets_the_same_answer_with_its_trace(self):
+        base, _ = self.live()
+        status, reply = self.post(base + "/api/ask", {"q": "is it safe to use?", "check": 50})
+        self.assertEqual(status, 200)
+        self.assertTrue(reply["answer"][0].startswith("Not yet."))
+        self.assertEqual(reply["consistency"], {"asked": 50, "different_answers": 1, "fingerprint": reply["fingerprint"]})
+        self.assertEqual(self.post(base + "/api/ask", {"q": "can I use it"})[1]["fingerprint"], reply["fingerprint"])
+        self.assertEqual(reply["trace"][0]["step"], "Read the question")
+        only_a2 = self.post(base + "/api/ask", {"q": "is it safe to use?", "for": "A2"})[1]
+        self.assertTrue(only_a2["answer"][0].startswith("Yes."))                     # it answers for the question asked
+        act = self.post(base + "/api/ask", {"q": "confirm F1", "name": "R. Engineer", "role": "research engineer"})[1]
+        self.post(base + "/api/reviews", {k: act["action"][k] for k in ("key", "status", "fix", "reviewer", "role", "note")})
+        after = self.post(base + "/api/ask", {"q": "who reviewed the changes?"})[1]
+        self.assertIn("confirmed as a real problem by R. Engineer", after["answer"][0])
+        self.assertNotEqual(self.post(base + "/api/ask", {"q": "is it safe to use?"})[1]["based_on"], reply["based_on"])
+        self.assertEqual(self.post(base + "/api/ask", {"q": ""})[0], 400)
+
+    def test_a_sealed_envelope_can_be_opened_from_the_page(self):
+        from tests.tiny_release import N1, P1, PROTEIN, TinyRelease
+        d = tempfile.mkdtemp()
+        repo = os.path.join(d, "oncosys-hackathon-challenge")
+        a = TinyRelease()
+        a.write(os.path.join(repo, "data", "tcga-brca", "raw"))
+        sealed = a.copy().swap(PROTEIN, P1, N1).write(os.path.join(d, "sealed"))
+        os.makedirs(os.path.join(repo, "envelopes"))
+        with open(os.path.join(repo, "envelopes", "unseal.py"), "w") as fh:        # a stand-in for the organisers' script
+            fh.write("import shutil, sys\n"
+                     "if sys.argv[2:] != ['amber', 'falcon', 'river', 'quartz']: sys.exit('wrong code for this envelope')\n"
+                     f"shutil.copytree({sealed!r}, 'envelopes/opened/E' + sys.argv[1] + '/release')\n")
+        httpd = make_server("127.0.0.1", 0, quiet=True, settings=os.path.join(d, "settings.json"))
+        httpd.challenge = repo
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        self.addCleanup(lambda: (httpd.shutdown(), httpd.server_close()))
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        from unittest import mock
+        no_uv = mock.patch("control_tower.envelope.shutil.which", return_value=None)     # use this Python, as a fresh clone would
+        no_uv.start()
+        self.addCleanup(no_uv.stop)
+        status, wrong = self.post(base + "/api/envelope", {"number": "07", "words": "amber falcon river wrong"})
+        self.assertEqual(status, 400)
+        self.assertIn("did not open", wrong["detail"])
+        self.assertIn("wrong code", wrong["detail"])
+        self.assertEqual(self.post(base + "/api/envelope", {"number": "07; rm -rf", "words": "a b c d"})[0], 400)
+        status, state = self.post(base + "/api/envelope", {"number": "07", "words": "Amber falcon  river quartz"})
+        self.assertEqual((status, state["new_name"], state["trusted_name"]), (200, "E07", "raw"))
+        doc = json.loads(self.get(base + "/api/findings")[1])
+        self.assertEqual([f["kind"] for f in doc["findings"]], ["sample_swap"])
+
     def test_the_audit_report_says_the_same_things_in_plain_english(self):
         base, _ = self.live()
         doc = json.loads(self.get(base + "/api/findings")[1])
