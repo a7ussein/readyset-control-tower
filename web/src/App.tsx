@@ -361,13 +361,13 @@ function ChangePanel({ finding, doc, index, total, review, onReview, step, waiti
               <div className="effect" key={id}>
                 <p className="effect-head"><span className="ref">{id}</span> {nameOf(doc, id)}
                   <Chip tone={`st-${text(analysis?.status)}`}>{text(analysis?.status) === 'not_rerun' ? 'could not be rerun' : STATUS[text(analysis?.status)] ?? 'no result'}</Chip></p>
-                {text(analysis?.status) === 'not_rerun' && <p className="plain">{text(analysis?.note)}</p>}
+                {text(analysis?.status) === 'not_rerun' && Boolean(analysis?.before || analysis?.after) && <p className="plain">{text(analysis?.note)}</p>}
                 {own(id)
                   ? <>
                       <p className="plain">{own(id)?.size === 'none' ? 'On its own, this change leaves the result exactly the same.'
                         : own(id)?.size === 'small'
                           ? `On its own, this change moves the result only slightly: ${words(own(id)?.measure)} by ${percent(own(id)?.moved_by)}, and no headline number (the difference, a group mean or a share) by half a percent.`
-                          : `On its own, this change moves the result clearly: ${words(own(id)?.measure)} by ${percent(own(id)?.moved_by)}. Half a percent on a headline number is the line.`}
+                          : `On its own, this change moves the result clearly: ${words(own(id)?.measure)} by ${percent(own(id)?.moved_by)}. Half a percent on a headline number is the line.`}{' '}
                         <span className={`sev size-${text(own(id)?.size)}`}>{own(id)?.size === 'none' ? 'no effect' : `${text(own(id)?.size)} effect`}</span></p>
                       {analysis && <ResultTable analysis={analysis} releases={[doc.releases[0] ?? 'before', 'this change alone']} own={own(id)} />}
                       {together(id).length > 1 && <p className="quiet">With all {together(id).length} changes that reach {id} in ({together(id).join(', ')}), the result is the one shown under "What I need it for".</p>}
@@ -900,7 +900,7 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
             const rerun = doc.analyses.filter(a => a.status === 'changed' || a.status === 'unchanged').length
             return <>
               {d && !isNaN(d.getTime()) && <span>Checked {d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}{typeof raw.x_readyset?.run_seconds === 'number' ? `, in ${raw.x_readyset.run_seconds} s` : ''}.</span>}
-              {compared > 0 && <span>{plural(compared, 'file')} read in full{same > 0 ? `, ${same} identical byte for byte` : ''}.</span>}
+              {compared > 0 && <span>{plural(compared, 'file')} read in full{same > 0 ? `, ${same} exactly identical` : ''}.</span>}
               {rerun > 0 && <span>{plural(rerun, 'result')} rerun on both releases, not estimated.</span>}
               <span>No AI wrote this answer.</span>
             </>
@@ -929,7 +929,7 @@ function Bench({ raw, onQuestion, onChanged, release }: { raw: Findings; onQuest
                     <div className="analysis-name"><span className="ref">{a.id}</span><b>{a.title || `Analysis ${a.id}`}</b></div>
                   </div>
                   {on && analysis
-                    ? <p className={`outcome ${reached(a.id) && status === 'not_rerun' ? 'stuck' : status}`}>{status === 'changed' ? `Result changed: ${headlineNumber(analysis)}`
+                    ? <p className={`outcome ${reached(a.id) && status === 'not_rerun' ? 'stuck' : status}`}>{status === 'changed' ? `Result changed: ${headlineNumber(analysis)}${doc.findings.filter(f => Array.isArray(f.affects_analyses) && f.affects_analyses.includes(a.id)).length > 1 ? ' (all changes together)' : ''}`
                         : status === 'unchanged' ? 'Rerun. The result is the same.'
                         : reached(a.id) ? `Could not be rerun ${text(analysis.note).replace(/^(Affected, but )?could not be (re)?run /i, '')}`
                         : 'Untouched. Nothing it reads has changed.'}</p>
