@@ -10,10 +10,5 @@
       "onAutoForward": "openPreview"
     }
   },
-  "postStartCommand": "nohup python3 -m control_tower serve --no-open > /tmp/control-tower.log 2>&1 &",
-  "features": {
-    "ghcr.io/devcontainers/features/sshd:1": {
-      "version": "latest"
-    }
-  }
+  "postStartCommand": "nohup python3 -m control_tower serve --no-open > /tmp/control-tower.log 2>&1 &"
 }
