@@ -76,6 +76,24 @@ class Ask(unittest.TestCase):
         self.assertIn("Nothing is recorded until you press the button", mine["answer"][-1])
         self.assertEqual(self.doc["findings"][0]["needs_human_review"], True)          # asking changed nothing
 
+    def test_the_request_to_a_model_carries_only_the_question_and_the_fixed_list(self):
+        from control_tower import understand_ai as u
+        body = u.claude_request("Is there anything this cannot tell me? " + "x" * 900)
+        self.assertEqual(len(body["messages"]), 1)
+        self.assertLessEqual(len(body["messages"][0]["content"]), 500)                  # a long question is cut short
+        self.assertNotIn("F1", json.dumps(body))                                        # no finding is ever in it
+        self.assertEqual(u.claude_headers("sk-ant-test")["x-api-key"], "sk-ant-test")
+        self.assertNotIn("sk-ant-test", json.dumps(body))                               # the key travels in a header only
+
+    def test_a_models_reply_counts_only_when_it_names_a_fixed_question(self):
+        from control_tower import understand_ai as u
+        text = lambda words: {"content": [{"type": "text", "text": words}]}
+        self.assertEqual(u.intent_of(u.claude_reply_text(text("limits"))), "limits")
+        self.assertEqual(u.intent_of(u.claude_reply_text(text("Limits."))), "limits")
+        self.assertIsNone(u.intent_of(u.claude_reply_text(text("I think you should change the treatment"))))
+        self.assertIsNone(u.intent_of(u.claude_reply_text({"stop_reason": "refusal", "content": []})))
+        self.assertIsNone(u.intent_of(""))
+
     def test_a_model_may_help_with_wording_only_and_never_sees_the_findings(self):
         from control_tower.understand_ai import make_router
         seen = []
