@@ -8,7 +8,8 @@ consulted when the word list did not understand the question.
 Two ways to have one, following the event's rule "use a local model or the user's own key":
   - the user's own Anthropic API key, typed into the page (or set as ANTHROPIC_API_KEY before starting). The key is
     held in memory while the page runs. It is never written to disk, never logged and never put in the repository.
-    Only the question is sent to Anthropic;
+    Only the question is sent to Anthropic. The online demo works the same way: the visitor types their own key, it
+    stays in that browser tab, and the request goes from the browser straight to Anthropic (see hosted/demo-shim.js);
   - a local model served by Ollama on this computer (http://localhost:11434). Nothing leaves the machine.
 The user's key is used when there is one, otherwise the local model. With neither there is no switch and nothing is
 ever sent anywhere.
@@ -70,16 +71,15 @@ def make_router(call=None, key=None):
         secret = key or os.environ.get("ANTHROPIC_API_KEY")
         call = (lambda text: _ask_claude(text, secret)) if how.startswith("your own") else _ask_local
     kept = {}
-    ids = [i for i, _, _ in INTENTS]
 
     def route(text):
         wording = " ".join(words_of(text))
         if wording not in kept:
             try:
-                said = str(call(str(text)[:500]) or "").strip().split()[0].strip('.:"\'` ').lower()
+                said = call(str(text)[:500])
             except (OSError, ValueError, KeyError, IndexError, TypeError):
                 return None                                   # no model, no network, bad key: "I cannot answer that"
-            kept[wording] = said if said in ids else None
+            kept[wording] = intent_of(said)
         return kept[wording]
     return route
 
@@ -92,18 +92,39 @@ def _instructions():
             "the question.\n\n" + menu)
 
 
-def _ask_claude(text, key):
-    """One Messages request. A declined request, or anything but a one-word reply, counts as "not understood"."""
-    body = {"model": MODEL, "max_tokens": 2048, "system": _instructions(), "output_config": {"effort": "low"},
-            "fallbacks": "default", "messages": [{"role": "user", "content": text}]}
-    req = urllib.request.Request(API, data=json.dumps(body).encode("utf-8"), method="POST", headers={
-        "x-api-key": key, "anthropic-version": "2026-10-21", "anthropic-beta": "server-side-fallback-2026-07-01",
-        "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        reply = json.load(r)
+def intent_of(said):
+    """The id of a fixed question named in a model's reply, or None when the reply is anything else."""
+    try:
+        word = str(said or "").strip().split()[0].strip('.:"\'` ').lower()
+    except IndexError:
+        return None
+    return word if word in [i for i, _, _ in INTENTS] else None
+
+
+def claude_request(text):
+    """The body of the one Messages request: the question and the list of fixed questions, nothing else."""
+    return {"model": MODEL, "max_tokens": 2048, "system": _instructions(), "output_config": {"effort": "low"},
+            "fallbacks": "default", "messages": [{"role": "user", "content": str(text)[:500]}]}
+
+
+def claude_headers(key):
+    return {"x-api-key": key, "anthropic-version": "2026-10-21", "anthropic-beta": "server-side-fallback-2026-07-01",
+            "Content-Type": "application/json"}
+
+
+def claude_reply_text(reply):
+    """The words of a Messages reply. A declined request counts as "none"."""
     if reply.get("stop_reason") == "refusal":
         return "none"
     return " ".join(b.get("text", "") for b in reply.get("content", []) if isinstance(b, dict) and b.get("type") == "text")
+
+
+def _ask_claude(text, key):
+    """One Messages request. A declined request, or anything but a one-word reply, counts as "not understood"."""
+    req = urllib.request.Request(API, data=json.dumps(claude_request(text)).encode("utf-8"), method="POST",
+                                 headers=claude_headers(key))
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return claude_reply_text(json.load(r))
 
 
 def _ask_local(text):

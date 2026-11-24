@@ -13,7 +13,14 @@
   const RELEASE_FILES = ['clinical.tsv', 'survival.tsv', 'mutation_gene_level.tsv.gz', 'protein_rppa.tsv.gz', 'copy_number_gistic.tsv.gz', 'rna_hiseq.tsv.gz']
   let live = false                          // true once the visitor has chosen a release of their own
   const pause = () => new Promise(done => setTimeout(done, 60))        // let the page say "Comparing" before the work starts
-  const flags = async () => ({ ...(await serverModel() ? { ai_understanding: "an AI model on the team's server" } : {}), voice: await serverVoice() })
+  // Understanding unusual wording needs a model. A visitor uses their own Anthropic key: it is typed into the page,
+  // kept in this tab's memory only, and sent from this browser straight to Anthropic. It never reaches our server.
+  // (If the hosting account has a key of its own set, that is used until the visitor gives theirs.)
+  let userKey = ''
+  const OWN_KEY = 'your own Anthropic key'
+  const looksLikeAKey = k => typeof k === 'string' && k.startsWith('sk-ant-') && k.length >= 20 && k.length <= 400 && !/\s/.test(k)
+  const howUnderstood = async () => (userKey ? OWN_KEY : (await serverModel() ? "an AI model on the team's server" : ''))
+  const flags = async () => ({ ai_understanding: await howUnderstood(), voice: await serverVoice() })
   let reviews = {}
   try { reviews = JSON.parse(sessionStorage.getItem(KEY) || '{}') || {} } catch { reviews = {} }
   const keep = () => { try { sessionStorage.setItem(KEY, JSON.stringify(reviews)) } catch { /* kept for this page only */ } }
@@ -143,6 +150,20 @@
         rows_in_file: null, rows_that_differ: 1, rows_left_out: 0,
         note: 'The practice release\'s files are not kept on this page, so only the one row recorded with its result is shown. Choose your own before and after releases and every row of the file opens here.' })
     }
+    if (path === '/api/model-key' && method === 'POST') {
+      let key
+      try { key = JSON.parse(typeof init.body === 'string' ? init.body : await new Response(init.body).text()).key } catch { return json(400, { detail: 'expected a key' }) }
+      if (key && !looksLikeAKey(key)) return json(400, { detail: 'That does not look like an Anthropic API key. They start with sk-ant-.' })
+      if (key) {                              // ask Anthropic whether it accepts the key; listing models costs nothing
+        let r
+        try { r = await realFetch('https://api.anthropic.com/v1/models?limit=1', { headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' } }) }
+        catch { return json(400, { detail: 'This browser could not reach Anthropic to check the key. Check your connection and try again.' }) }
+        if (r.status === 401 || r.status === 403) return json(400, { detail: 'Anthropic did not accept that key. Check it and try again.' })
+      }
+      userKey = key || ''
+      for (const wording of Object.keys(understood)) delete understood[wording]
+      return json(200, { ai_understanding: await howUnderstood() })
+    }
     if (path === '/api/speak' && method === 'POST') return realFetch(new URL('api/speak', here), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: init.body })
     if (path === '/api/history') return json(200, { comparisons: [] })
     if (path === '/api/findings') {
@@ -185,15 +206,25 @@ if _a["check"]:
 json.dumps(_r)`)
       }
       let reply = run('')
-      // The word list understood nothing and the person switched the model on: ask the server which fixed question
-      // is meant. Only the question goes; the findings stay in this browser. The answer is still built here.
+      // The word list understood nothing and a model is available: ask it which fixed question is meant. Only the
+      // question goes; the findings stay in this browser. The answer is still built here.
       if (body.ai === true && JSON.parse(reply).intent === null) {
         const key = body.q.trim().toLowerCase()
         if (!(key in understood)) {
           try {
-            const r = await realFetch(new URL('api/understand', here), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: body.q.slice(0, 500) }) })
-            if (r.ok) understood[key] = (await r.json()).intent || ''
-          } catch { /* no server: it stays "I cannot answer that" */ }
+            if (userKey) {                    // the visitor's own key: this browser asks Anthropic directly
+              py.globals.set('route_text', body.q.slice(0, 500))
+              const req = JSON.parse(py.runPython('from control_tower import understand_ai as _u\njson.dumps({"body": _u.claude_request(route_text), "headers": _u.claude_headers("")})'))
+              const r = await realFetch('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { ...req.headers, 'x-api-key': userKey, 'anthropic-dangerous-direct-browser-access': 'true' }, body: JSON.stringify(req.body) })
+              if (r.ok) {
+                py.globals.set('reply_text', await r.text())
+                understood[key] = py.runPython('_u.intent_of(_u.claude_reply_text(json.loads(reply_text))) or ""')
+              }
+            } else {
+              const r = await realFetch(new URL('api/understand', here), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: body.q.slice(0, 500) }) })
+              if (r.ok) understood[key] = (await r.json()).intent || ''
+            }
+          } catch { /* no key, no server, no network: it stays "I cannot answer that" */ }
         }
         if (understood[key]) reply = run(understood[key])
       }
